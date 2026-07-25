@@ -109,6 +109,14 @@ class JeopardyGame {
         document.getElementById('show-full-results').addEventListener('click', () => this.toggleFullResults());
         document.getElementById('new-game').addEventListener('click', () => this.disconnect());
         document.getElementById('toggle-music').addEventListener('click', () => this.toggleMusic());
+        
+        // Permitir unirse con Enter
+        document.getElementById('room-code').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('join-player-name').focus();
+        });
+        document.getElementById('join-player-name').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.joinRoom();
+        });
     }
 
     // ==================== NAVEGACIÓN ====================
@@ -127,9 +135,19 @@ class JeopardyGame {
 
     // ==================== SALA / CONEXIÓN ====================
 
+    // CORREGIDO: generar código alfanumérico de 6 caracteres
+    generateRoomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    }
+
     createRoom() {
         this.isHost = true;
-        this.roomCode = String(Math.floor(100000 + Math.random() * 900000));
+        this.roomCode = this.generateRoomCode(); // CORREGIDO
         this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
         this.joinedNames = new Set(['Host']);
         this.initPeer(this.roomCode + '-host');
@@ -137,9 +155,13 @@ class JeopardyGame {
     }
 
     joinRoom() {
-        const code = document.getElementById('room-code').value.trim();
+        const code = document.getElementById('room-code').value.trim().toUpperCase();
         const name = document.getElementById('join-player-name').value.trim();
-        if (!code || code.length !== 6 || !/^\d+$/.test(code)) return alert('Ingresa un código válido de 6 dígitos');
+        
+        // CORREGIDO: validación para código alfanumérico
+        if (!code || code.length !== 6) {
+            return alert('Ingresa un código válido de 6 caracteres');
+        }
         if (!name) return alert('Ingresa tu nombre');
 
         const btn = document.getElementById('join-room-submit');
@@ -157,6 +179,7 @@ class JeopardyGame {
         this.peer = new Peer(id, { debug: 0 });
 
         this.peer.on('open', () => {
+            console.log('Conectado con ID:', id);
             if (!this.isHost) {
                 const conn = this.peer.connect(this.roomCode + '-host', {
                     reliable: true,
@@ -168,23 +191,33 @@ class JeopardyGame {
 
         this.peer.on('connection', (conn) => this.handleConnection(conn));
 
-        this.peer.on('error', () => {
+        this.peer.on('error', (err) => {
+            console.error('Error PeerJS:', err);
             if (!this.isHost) {
-                alert('No se pudo conectar. Verifica el código.');
+                alert('No se pudo conectar. Verifica el código de sala.');
                 document.getElementById('join-room-submit').disabled = false;
                 document.getElementById('join-room-submit').textContent = 'Entrar';
+            }
+        });
+        
+        this.peer.on('disconnected', () => {
+            console.log('Peer desconectado, reconectando...');
+            if (this.peer && !this.peer.destroyed) {
+                this.peer.reconnect();
             }
         });
     }
 
     handleConnection(conn) {
         if (this.connections.find(c => c.peer === conn.peer)) {
+            console.log('Conexión duplicada, cerrando:', conn.peer);
             conn.close();
             return;
         }
         this.connections.push(conn);
 
         conn.on('open', () => {
+            console.log('Conexión abierta con:', conn.peer);
             if (this.isHost) {
                 conn.send({
                     type: 'welcome',
@@ -204,6 +237,7 @@ class JeopardyGame {
         conn.on('data', (data) => this.handleData(conn, data));
 
         conn.on('close', () => {
+            console.log('Conexión cerrada:', conn.peer);
             this.connections = this.connections.filter(c => c !== conn);
             if (this.isHost && conn.metadata?.name) {
                 this.players = this.players.filter(p => p.name !== conn.metadata.name);
@@ -211,6 +245,10 @@ class JeopardyGame {
                 this.broadcastPlayers();
                 this.updateLobby();
             }
+        });
+        
+        conn.on('error', (err) => {
+            console.error('Error en conexión:', err);
         });
     }
 
@@ -277,7 +315,13 @@ class JeopardyGame {
     }
 
     broadcast(data) {
-        this.connections.forEach(c => { if (c.open) { try { c.send(data); } catch(e) {} } });
+        this.connections.forEach(c => { 
+            if (c.open) { 
+                try { c.send(data); } catch(e) {
+                    console.error('Error al enviar:', e);
+                }
+            } 
+        });
     }
 
     broadcastPlayers() {
@@ -397,7 +441,8 @@ class JeopardyGame {
 
     showLobby() {
         document.getElementById('room-code-display').textContent = this.roomCode;
-        this.generateQR();
+        // CORREGIDO: generar QR con delay para asegurar que el DOM esté listo
+        setTimeout(() => this.generateQR(), 100);
         this.updateLobby();
         this.showScreen('lobby-screen');
 
@@ -410,15 +455,36 @@ class JeopardyGame {
 
     generateQR() {
         const container = document.getElementById('qrcode');
+        if (!container) return;
+        
+        // Limpiar contenedor
         container.innerHTML = '';
-        const url = `https://oscarium360.github.io/Pagina-Trivia/?room=${this.roomCode}`;
-        new QRCode(container, {
-            text: url,
-            width: 150,
-            height: 150,
-            colorDark: '#1e293b',
-            colorLight: '#ffffff'
-        });
+        
+        // Crear URL para el QR
+        const baseUrl = window.location.origin + window.location.pathname;
+        const url = `${baseUrl}?room=${this.roomCode}`;
+        
+        console.log('Generando QR para:', url);
+        
+        try {
+            // Usar QRCode con opciones correctas
+            new QRCode(container, {
+                text: url,
+                width: 150,
+                height: 150,
+                colorDark: '#1e293b',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            console.log('QR generado exitosamente');
+        } catch (error) {
+            console.error('Error al generar QR:', error);
+            // Fallback: mostrar enlace como texto
+            container.innerHTML = `
+                <div style="padding: 10px; text-align: center;">
+                    <p style="font-size: 0.8rem; word-break: break-all; color: #6366f1;">${url}</p>
+                </div>`;
+        }
     }
 
     updateLobby() {
@@ -719,7 +785,8 @@ class JeopardyGame {
         document.getElementById('join-form').classList.add('hidden');
         const btn = document.getElementById('join-room-submit');
         if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-        document.getElementById('confetti').innerHTML = '';
+        const confetti = document.getElementById('confetti');
+        if (confetti) confetti.innerHTML = '';
 
         this.showScreen('home-screen');
     }
