@@ -18,7 +18,7 @@
         <!-- Home -->
         <div id="home-screen" class="screen active">
             <div class="logo-container">
-                <div class="logo">🏆</div>
+                <div class="logo">🎯</div>
                 <h1>Jeopardy Trivia</h1>
                 <p class="subtitle">El juego de preguntas definitivo</p>
             </div>
@@ -28,6 +28,11 @@
                 </button>
                 <button id="join-room-btn" class="btn btn-secondary btn-lg">
                     <i class="fas fa-sign-in-alt"></i> Unirse
+                </button>
+            </div>
+            <div class="trivia-actions">
+                <button id="load-trivia-btn" class="btn btn-secondary">
+                    <i class="fas fa-folder-open"></i> Cargar Trivia Guardada
                 </button>
             </div>
             <div id="join-form" class="hidden card">
@@ -43,6 +48,17 @@
                 <div class="form-actions">
                     <button id="join-room-submit" class="btn btn-primary">Entrar</button>
                     <button id="cancel-join" class="btn btn-text">Cancelar</button>
+                </div>
+            </div>
+            <div id="load-trivia-form" class="hidden card">
+                <h3>Cargar Trivia Guardada</h3>
+                <p class="hint">Pega el código de la trivia que guardaste anteriormente</p>
+                <div class="input-group">
+                    <textarea id="trivia-code-input" placeholder="Pega aquí el código..." rows="4"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button id="load-trivia-submit" class="btn btn-primary">Cargar Trivia</button>
+                    <button id="cancel-load-trivia" class="btn btn-text">Cancelar</button>
                 </div>
             </div>
             <div class="music-toggle">
@@ -96,6 +112,9 @@
                 <button id="back-to-categories" class="btn btn-text">
                     <i class="fas fa-arrow-left"></i> Volver
                 </button>
+                <button id="export-trivia" class="btn btn-secondary">
+                    <i class="fas fa-copy"></i> Copiar Código de Trivia
+                </button>
                 <button id="submit-questions" class="btn btn-primary">Finalizar</button>
             </div>
         </div>
@@ -129,7 +148,7 @@
         <!-- Game -->
         <div id="game-screen" class="screen">
             <div class="game-header">
-                <h1>🏆 Jeopardy</h1>
+                <h1>🎯 Jeopardy</h1>
                 <div id="host-controls">
                     <button id="end-game" class="btn btn-danger">
                         <i class="fas fa-flag-checkered"></i> Finalizar
