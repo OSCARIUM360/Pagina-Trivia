@@ -540,109 +540,244 @@ class JeopardyGame {
 
     // ==================== EXPORTAR / IMPORTAR ====================
 
-    exportTrivia() {
-        if (!this.isHost) return;
-        if (this.questions.length === 0) return alert('Primero crea las preguntas');
+    // ==================== EXPORTAR / IMPORTAR ====================
+
+exportTrivia() {
+    console.log('Exportando trivia...');
+    
+    if (!this.isHost) {
+        console.log('No es host, no puede exportar');
+        return;
+    }
+    
+    // Obtener preguntas actuales de los campos de texto
+    const qInputs = document.querySelectorAll('.q-input');
+    const aInputs = document.querySelectorAll('.a-input');
+    
+    // Actualizar questions desde los inputs
+    qInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const q = this.questions.find(q => q.id === id);
+        if (q) q.question = input.value.trim();
+    });
+    aInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const q = this.questions.find(q => q.id === id);
+        if (q) q.answer = input.value.trim();
+    });
+    
+    if (this.questions.length === 0) {
+        alert('Primero crea las preguntas antes de exportar');
+        return;
+    }
+    
+    // Verificar que todas las preguntas tengan datos
+    const hasEmpty = this.questions.some(q => !q.question || !q.answer);
+    if (hasEmpty) {
+        alert('Completa todas las preguntas y respuestas antes de exportar');
+        return;
+    }
+    
+    // Crear objeto con los datos de la trivia
+    const triviaData = {
+        v: 1,
+        c: this.categories,
+        qpc: this.questionsPerCategory,
+        q: this.questions.map(q => ({
+            cat: q.category,
+            pts: q.points,
+            q: q.question,
+            a: q.answer
+        }))
+    };
+    
+    // Convertir a JSON y Base64
+    const jsonStr = JSON.stringify(triviaData);
+    const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    const code = 'JPTV' + base64;
+    
+    console.log('Código generado. Longitud:', code.length);
+    
+    // Copiar al portapapeles
+    this.copyToClipboard(code);
+    
+    // Mostrar toast
+    this.showToast('✅ ¡Código copiado! Ya puedes compartir esta trivia');
+}
+
+importTrivia() {
+    console.log('Importando trivia...');
+    
+    const codeInput = document.getElementById('trivia-code-input');
+    if (!codeInput) {
+        console.error('No se encontró el textarea');
+        return;
+    }
+    
+    const code = codeInput.value.trim();
+    console.log('Código ingresado:', code.substring(0, 10) + '...');
+    
+    if (!code) {
+        alert('Pega el código de la trivia');
+        return;
+    }
+    
+    if (!code.startsWith('JPTV')) {
+        alert('Código inválido. Debe comenzar con "JPTV"');
+        return;
+    }
+    
+    try {
+        // Extraer Base64
+        const base64 = code.substring(4);
+        console.log('Base64 longitud:', base64.length);
         
-        const hasEmpty = this.questions.some(q => !q.question || !q.answer);
-        if (hasEmpty) return alert('Completa todas las preguntas y respuestas');
+        // Decodificar
+        const jsonStr = decodeURIComponent(escape(atob(base64)));
+        console.log('JSON longitud:', jsonStr.length);
         
-        const triviaData = {
-            version: 1,
-            categories: this.categories,
-            questionsPerCategory: this.questionsPerCategory,
-            questions: this.questions.map(q => ({
+        const data = JSON.parse(jsonStr);
+        console.log('Datos parseados:', data);
+        
+        // Validar estructura (soporta formato antiguo y nuevo)
+        let categories, questionsPerCategory, questions;
+        
+        if (data.categories && data.questions) {
+            // Formato antiguo
+            categories = data.categories;
+            questionsPerCategory = data.questionsPerCategory;
+            questions = data.questions.map(q => ({
                 category: q.category,
                 points: q.points,
                 question: q.question,
                 answer: q.answer
-            }))
-        };
-        
-        const jsonStr = JSON.stringify(triviaData);
-        const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
-        const code = 'JPTV' + base64;
-        
-        this.copyToClipboard(code);
-        this.showToast('✅ ¡Código copiado! Pega este código para cargar la trivia');
-    }
-
-    importTrivia() {
-        const codeInput = document.getElementById('trivia-code-input');
-        const code = codeInput.value.trim();
-        
-        if (!code) return alert('Pega el código de la trivia');
-        if (!code.startsWith('JPTV')) return alert('Código inválido. Debe comenzar con "JPTV"');
-        
-        try {
-            const base64 = code.substring(4);
-            const jsonStr = decodeURIComponent(escape(atob(base64)));
-            const triviaData = JSON.parse(jsonStr);
-            
-            if (!triviaData.categories || !triviaData.questions || !triviaData.questionsPerCategory)
-                throw new Error('Formato inválido');
-            
-            this.isHost = true;
-            this.categories = triviaData.categories;
-            this.totalCategories = triviaData.categories.length;
-            this.questionsPerCategory = triviaData.questionsPerCategory;
-            this.questions = triviaData.questions.map((q, i) => ({
-                id: i,
-                category: q.category,
-                points: q.points,
-                question: q.question,
-                answer: q.answer,
-                used: false
             }));
-            
-            this.roomCode = this.generateRoomCode();
-            this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
-            this.joinedNames = new Set(['Host']);
-            this.gameStarted = false;
-            
-            document.getElementById('load-trivia-form').classList.add('hidden');
-            codeInput.value = '';
-            
-            this.initPeer(this.roomCode + '-host');
-            this.showLobby();
-            this.saveState();
-            this.showToast('✅ ¡Trivia cargada! ' + this.totalCategories + ' categorías, ' + this.questions.length + ' preguntas');
-        } catch (error) {
-            console.error('Error al importar:', error);
-            alert('Error al cargar la trivia. Verifica que el código esté completo.');
-        }
-    }
-
-    copyToClipboard(text) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text));
+        } else if (data.c && data.q) {
+            // Formato nuevo comprimido
+            categories = data.c;
+            questionsPerCategory = data.qpc;
+            questions = data.q.map(q => ({
+                category: q.cat,
+                points: q.pts,
+                question: q.q,
+                answer: q.a
+            }));
         } else {
-            this.fallbackCopy(text);
+            throw new Error('Formato no reconocido');
         }
-    }
-
-    fallbackCopy(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try { document.execCommand('copy'); } catch (err) {}
-        document.body.removeChild(textarea);
-    }
-
-    showToast(message) {
-        const existing = document.querySelector('.export-toast');
-        if (existing) existing.remove();
         
-        const toast = document.createElement('div');
-        toast.className = 'export-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
+        if (!categories || !questions || !questionsPerCategory) {
+            throw new Error('Datos incompletos');
+        }
         
-        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
+        console.log('Categorías:', categories.length);
+        console.log('Preguntas:', questions.length);
+        
+        // Cargar datos
+        this.clearState();
+        this.isHost = true;
+        this.categories = categories;
+        this.totalCategories = categories.length;
+        this.questionsPerCategory = questionsPerCategory;
+        
+        // Reconstruir preguntas
+        this.questions = questions.map((q, index) => ({
+            id: index,
+            category: q.category,
+            points: q.points,
+            question: q.question,
+            answer: q.answer,
+            used: false
+        }));
+        
+        // Generar nuevo código de sala
+        this.roomCode = this.generateRoomCode();
+        this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
+        this.joinedNames = new Set(['Host']);
+        this.gameStarted = false;
+        
+        // Limpiar formulario
+        document.getElementById('load-trivia-form').classList.add('hidden');
+        codeInput.value = '';
+        
+        // Iniciar conexión
+        this.initPeer(this.roomCode + '-host');
+        
+        // Ir al lobby
+        this.showLobby();
+        this.saveState();
+        
+        this.showToast('✅ ¡Trivia cargada! ' + this.totalCategories + ' categorías, ' + this.questions.length + ' preguntas');
+        
+    } catch (error) {
+        console.error('Error al importar:', error);
+        alert('Error al cargar la trivia. Asegúrate de que el código esté completo y no tenga espacios o saltos de línea.');
     }
+}
+
+copyToClipboard(text) {
+    console.log('Copiando al portapapeles...');
+    
+    // Intentar método moderno
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('Copiado con Clipboard API');
+        }).catch(err => {
+            console.error('Error Clipboard API:', err);
+            this.fallbackCopy(text);
+        });
+    } else {
+        this.fallbackCopy(text);
+    }
+}
+
+fallbackCopy(text) {
+    console.log('Usando método fallback para copiar');
+    
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    
+    try {
+        const success = document.execCommand('copy');
+        console.log('Fallback copy:', success ? 'exitoso' : 'fallido');
+        if (!success) {
+            // Mostrar el código para copia manual
+            prompt('Copia este código manualmente (Ctrl+C):', text);
+        }
+    } catch (err) {
+        console.error('Error en fallback:', err);
+        prompt('Copia este código manualmente (Ctrl+C):', text);
+    }
+    
+    document.body.removeChild(textarea);
+}
+
+showToast(message) {
+    console.log('Toast:', message);
+    
+    // Eliminar toast anterior
+    const existing = document.querySelector('.export-toast');
+    if (existing) existing.remove();
+    
+    // Crear nuevo toast
+    const toast = document.createElement('div');
+    toast.className = 'export-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Eliminar después de 3 segundos
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 3000);
+}
 
     // ==================== LOBBY ====================
 
