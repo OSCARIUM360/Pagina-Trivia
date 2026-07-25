@@ -1,3 +1,9 @@
+// Esperar a que el DOM esté completamente cargado
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM cargado, iniciando juego...');
+    window.game = new JeopardyGame();
+});
+
 class JeopardyGame {
     constructor() {
         this.categories = [];
@@ -18,57 +24,17 @@ class JeopardyGame {
         this.playerName = '';
         this.sortedPlayers = [];
 
-        this.init();
-    }
-
-    init() {
-        // Esperar a que el DOM esté completamente cargado
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.setup());
-        } else {
-            this.setup();
-        }
-    }
-
-    setup() {
-        console.log('Inicializando Jeopardy Game...');
+        console.log('Constructor llamado');
+        this.setupMusic();
         this.bindEvents();
         this.showScreen('home-screen');
-        this.setupMusic();
-        
-        // Intentar reproducir música con la primera interacción
-        document.addEventListener('click', () => this.tryPlayMusic(), { once: true });
-        
-        console.log('Juego inicializado correctamente');
+        console.log('Juego inicializado');
     }
 
     setupMusic() {
         this.bgMusic = document.getElementById('bg-music');
         if (this.bgMusic) {
             this.bgMusic.volume = 0.15;
-            console.log('Música configurada');
-        }
-    }
-
-    tryPlayMusic() {
-        if (!this.musicPlaying && this.bgMusic) {
-            this.bgMusic.play().catch((e) => console.log('No se pudo reproducir música:', e));
-            this.musicPlaying = true;
-        }
-    }
-
-    toggleMusic() {
-        const btn = document.getElementById('toggle-music');
-        if (!btn) return;
-        
-        if (this.musicPlaying) {
-            if (this.bgMusic) this.bgMusic.pause();
-            btn.innerHTML = '<i class="fas fa-music"></i>';
-            this.musicPlaying = false;
-        } else {
-            if (this.bgMusic) this.bgMusic.play().catch(() => {});
-            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            this.musicPlaying = true;
         }
     }
 
@@ -106,98 +72,94 @@ class JeopardyGame {
     bindEvents() {
         console.log('Vinculando eventos...');
         
-        // Home screen - Usar comprobación de existencia
-        this.safeBind('create-room-btn', 'click', () => this.createRoom());
-        this.safeBind('join-room-btn', 'click', () => {
-            const form = document.getElementById('join-form');
-            if (form) form.classList.remove('hidden');
+        // Home
+        this.onClick('create-room-btn', () => this.createRoom());
+        this.onClick('join-room-btn', () => {
+            document.getElementById('join-form').classList.remove('hidden');
         });
-        this.safeBind('join-room-submit', 'click', () => this.joinRoom());
-        this.safeBind('cancel-join', 'click', () => {
-            const form = document.getElementById('join-form');
-            if (form) form.classList.add('hidden');
+        this.onClick('join-room-submit', () => this.joinRoom());
+        this.onClick('cancel-join', () => {
+            document.getElementById('join-form').classList.add('hidden');
         });
+        this.onClick('toggle-music', () => this.toggleMusic());
         
         // Setup
-        this.safeBind('back-to-home', 'click', () => this.disconnect());
-        this.safeBind('create-board', 'click', () => this.createBoard());
-        this.safeBind('back-to-setup', 'click', () => this.showScreen('setup-screen'));
+        this.onClick('back-to-home', () => this.disconnect());
+        this.onClick('create-board', () => this.createBoard());
+        this.onClick('back-to-setup', () => this.showScreen('setup-screen'));
         
         // Categories
-        this.safeBind('submit-categories', 'click', () => this.submitCategories());
-        this.safeBind('back-to-categories', 'click', () => this.showCategoriesScreen());
+        this.onClick('submit-categories', () => this.submitCategories());
+        this.onClick('back-to-categories', () => this.showCategoriesScreen());
         
         // Questions
-        this.safeBind('submit-questions', 'click', () => this.submitQuestions());
-        this.safeBind('back-to-questions', 'click', () => this.showScreen('questions-screen'));
+        this.onClick('submit-questions', () => this.submitQuestions());
+        this.onClick('back-to-questions', () => this.showScreen('questions-screen'));
         
         // Lobby
-        this.safeBind('start-game-lobby', 'click', () => this.startGame());
+        this.onClick('start-game-lobby', () => this.startGame());
         
         // Game
-        this.safeBind('end-game', 'click', () => this.endGame());
+        this.onClick('end-game', () => this.endGame());
         
         // Modal
+        this.onClick('btn-correct', () => this.handleAnswer(true));
+        this.onClick('btn-incorrect', () => this.handleAnswer(false));
+        
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.closeModal());
         }
-        this.safeBind('btn-correct', 'click', () => this.handleAnswer(true));
-        this.safeBind('btn-incorrect', 'click', () => this.handleAnswer(false));
         
         // Results
-        this.safeBind('show-full-results', 'click', () => this.toggleFullResults());
-        this.safeBind('new-game', 'click', () => this.disconnect());
+        this.onClick('show-full-results', () => this.toggleFullResults());
+        this.onClick('new-game', () => this.disconnect());
         
-        // Music
-        this.safeBind('toggle-music', 'click', () => this.toggleMusic());
-        
-        // Enter key para unirse
-        const roomCodeInput = document.getElementById('room-code');
-        const playerNameInput = document.getElementById('join-player-name');
-        
-        if (roomCodeInput) {
-            roomCodeInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && playerNameInput) playerNameInput.focus();
+        // Enter para unirse
+        const roomInput = document.getElementById('room-code');
+        const nameInput = document.getElementById('join-player-name');
+        if (roomInput && nameInput) {
+            roomInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') nameInput.focus();
             });
-        }
-        if (playerNameInput) {
-            playerNameInput.addEventListener('keypress', (e) => {
+            nameInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') this.joinRoom();
             });
         }
         
-        console.log('Eventos vinculados correctamente');
+        console.log('Eventos vinculados');
     }
 
-    // Método seguro para vincular eventos
-    safeBind(elementId, event, handler) {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.addEventListener(event, handler);
-            console.log(`Evento vinculado: ${elementId} -> ${event}`);
+    onClick(id, handler) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', handler);
+            console.log('✓ Evento:', id);
         } else {
-            console.warn(`Elemento no encontrado: ${elementId}`);
+            console.error('✗ No encontrado:', id);
         }
     }
 
     showScreen(id) {
-        console.log('Mostrando pantalla:', id);
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         const screen = document.getElementById(id);
-        if (screen) {
-            screen.classList.add('active');
-        } else {
-            console.error('Pantalla no encontrada:', id);
-        }
-        this.updateUIForRole();
-    }
-
-    updateUIForRole() {
+        if (screen) screen.classList.add('active');
+        
         const hostControls = document.getElementById('host-controls');
         const lobbyActions = document.getElementById('lobby-host-actions');
         if (hostControls) hostControls.style.display = this.isHost ? 'flex' : 'none';
         if (lobbyActions) lobbyActions.style.display = this.isHost ? 'flex' : 'none';
+    }
+
+    toggleMusic() {
+        if (this.musicPlaying) {
+            if (this.bgMusic) this.bgMusic.pause();
+            document.getElementById('toggle-music').innerHTML = '<i class="fas fa-music"></i>';
+        } else {
+            if (this.bgMusic) this.bgMusic.play().catch(() => {});
+            document.getElementById('toggle-music').innerHTML = '<i class="fas fa-volume-up"></i>';
+        }
+        this.musicPlaying = !this.musicPlaying;
     }
 
     generateRoomCode() {
@@ -206,7 +168,6 @@ class JeopardyGame {
         for (let i = 0; i < 6; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        console.log('Código generado:', code);
         return code;
     }
 
@@ -216,50 +177,25 @@ class JeopardyGame {
         this.roomCode = this.generateRoomCode();
         this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
         this.joinedNames = new Set(['Host']);
-        
-        const hostPeerId = this.roomCode + '-host';
-        this.initPeer(hostPeerId);
+        this.initPeer(this.roomCode + '-host');
         this.showScreen('setup-screen');
     }
 
     joinRoom() {
-        console.log('Intentando unirse a sala...');
+        const code = document.getElementById('room-code').value.trim().toUpperCase();
+        const name = document.getElementById('join-player-name').value.trim();
         
-        const codeInput = document.getElementById('room-code');
-        const nameInput = document.getElementById('join-player-name');
-        
-        if (!codeInput || !nameInput) {
-            console.error('Inputs no encontrados');
-            return;
-        }
-        
-        const code = codeInput.value.trim().toUpperCase();
-        const name = nameInput.value.trim();
-        
-        console.log('Código:', code, 'Nombre:', name);
-        
-        if (!name) {
-            alert('Por favor, ingresa tu nombre');
-            return;
-        }
-        
-        if (!code || code.length !== 6) {
-            alert('El código debe tener exactamente 6 caracteres');
-            return;
-        }
-        
+        if (!name) return alert('Ingresa tu nombre');
+        if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
+
         const btn = document.getElementById('join-room-submit');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Conectando...';
-        }
+        btn.disabled = true;
+        btn.textContent = 'Conectando...';
 
         this.roomCode = code;
         this.isHost = false;
         this.playerName = name;
-        
-        const playerPeerId = code + '-' + Date.now();
-        this.initPeer(playerPeerId);
+        this.initPeer(code + '-' + Date.now());
     }
 
     initPeer(id) {
@@ -268,76 +204,54 @@ class JeopardyGame {
             this.peer = null;
         }
         
-        console.log('Iniciando PeerJS con ID:', id);
+        console.log('Iniciando PeerJS:', id);
         
-        try {
-            this.peer = new Peer(id, {
-                debug: 1,
-                config: {
-                    'iceServers': [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
+        this.peer = new Peer(id, {
+            debug: 0,
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            }
+        });
 
-            this.peer.on('open', (peerId) => {
-                console.log('✅ PeerJS conectado. Mi ID:', peerId);
-                
-                if (!this.isHost) {
-                    const hostPeerId = this.roomCode + '-host';
-                    console.log('Conectando al host:', hostPeerId);
-                    const conn = this.peer.connect(hostPeerId, {
-                        reliable: true,
-                        metadata: { name: this.playerName }
-                    });
-                    this.handleConnection(conn);
-                }
-            });
-
-            this.peer.on('connection', (conn) => {
-                console.log('📞 Conexión entrante de:', conn.peer);
+        this.peer.on('open', (peerId) => {
+            console.log('PeerJS abierto:', peerId);
+            if (!this.isHost) {
+                const hostId = this.roomCode + '-host';
+                console.log('Conectando a host:', hostId);
+                const conn = this.peer.connect(hostId, {
+                    reliable: true,
+                    metadata: { name: this.playerName }
+                });
                 this.handleConnection(conn);
-            });
+            }
+        });
 
-            this.peer.on('error', (err) => {
-                console.error('❌ Error PeerJS:', err);
-                if (!this.isHost) {
-                    alert('Error de conexión. Verifica el código e inténtalo de nuevo.');
-                    const btn = document.getElementById('join-room-submit');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.textContent = 'Entrar';
-                    }
-                }
-            });
-            
-            this.peer.on('disconnected', () => {
-                console.log('⚠️ Peer desconectado');
-                if (this.peer && !this.peer.destroyed) {
-                    this.peer.reconnect();
-                }
-            });
-        } catch (err) {
-            console.error('Error al crear Peer:', err);
-            alert('Error al inicializar la conexión. Recarga la página.');
-        }
+        this.peer.on('connection', (conn) => {
+            console.log('Conexión entrante:', conn.peer);
+            this.handleConnection(conn);
+        });
+
+        this.peer.on('error', (err) => {
+            console.error('Error PeerJS:', err);
+            if (!this.isHost) {
+                alert('Error de conexión. Verifica el código.');
+                const btn = document.getElementById('join-room-submit');
+                if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+            }
+        });
     }
 
     handleConnection(conn) {
-        const existingConn = this.connections.find(c => c.peer === conn.peer);
-        if (existingConn) {
-            console.log('Conexión duplicada, cerrando');
+        if (this.connections.find(c => c.peer === conn.peer)) {
             conn.close();
             return;
         }
-        
         this.connections.push(conn);
-        console.log('Total conexiones:', this.connections.length);
 
         conn.on('open', () => {
-            console.log('🔗 Conexión abierta con:', conn.peer);
-            
+            console.log('Conexión abierta');
             if (this.isHost) {
                 conn.send({
                     type: 'welcome',
@@ -354,13 +268,9 @@ class JeopardyGame {
             }
         });
 
-        conn.on('data', (data) => {
-            console.log('📩 Datos recibidos:', data.type);
-            this.handleData(conn, data);
-        });
+        conn.on('data', (data) => this.handleData(conn, data));
 
         conn.on('close', () => {
-            console.log('Conexión cerrada:', conn.peer);
             this.connections = this.connections.filter(c => c !== conn);
             if (this.isHost && conn.metadata?.name) {
                 this.players = this.players.filter(p => p.name !== conn.metadata.name);
@@ -375,7 +285,6 @@ class JeopardyGame {
         if (!this.isHost) {
             switch (data.type) {
                 case 'welcome':
-                    console.log('🎉 Bienvenido a la sala');
                     this.players = data.players || [];
                     this.updateLobby();
                     if (data.gameStarted) {
@@ -386,10 +295,7 @@ class JeopardyGame {
                         this.showLobby();
                     }
                     const btn = document.getElementById('join-room-submit');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.textContent = 'Entrar';
-                    }
+                    if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
                     break;
                 case 'players-update':
                     this.players = data.players;
@@ -410,7 +316,7 @@ class JeopardyGame {
                     this.showAnswerForPlayers(data);
                     break;
                 case 'close-modal':
-                    this.closeModalForPlayers();
+                    document.getElementById('question-modal').classList.remove('active');
                     break;
                 case 'game-end':
                     this.players = data.players;
@@ -418,14 +324,6 @@ class JeopardyGame {
                     document.getElementById('question-modal').classList.remove('active');
                     this.showResults();
                     this.playSound('win');
-                    break;
-                case 'error':
-                    alert('Error: ' + data.message);
-                    const btnErr = document.getElementById('join-room-submit');
-                    if (btnErr) {
-                        btnErr.disabled = false;
-                        btnErr.textContent = 'Entrar';
-                    }
                     break;
             }
         } else {
@@ -437,10 +335,7 @@ class JeopardyGame {
 
     handleJoinRequest(conn, data) {
         const name = data.name?.trim();
-        if (!name) {
-            conn.send({ type: 'error', message: 'Nombre inválido' });
-            return;
-        }
+        if (!name) return;
         if (this.joinedNames.has(name)) {
             conn.send({ type: 'error', message: 'Nombre ya en uso' });
             return;
@@ -450,9 +345,7 @@ class JeopardyGame {
             return;
         }
 
-        console.log('✅ Jugador aceptado:', name);
-        const player = { name, score: 0, id: conn.peer, isHost: false };
-        this.players.push(player);
+        this.players.push({ name, score: 0, id: conn.peer, isHost: false });
         this.joinedNames.add(name);
         conn.metadata = { name };
         conn.send({ type: 'join-accepted', players: this.players });
@@ -461,11 +354,7 @@ class JeopardyGame {
     }
 
     broadcast(data) {
-        this.connections.forEach(c => { 
-            if (c.open) { 
-                try { c.send(data); } catch(e) {} 
-            } 
-        });
+        this.connections.forEach(c => { if (c.open) { try { c.send(data); } catch(e) {} } });
     }
 
     broadcastPlayers() {
@@ -543,8 +432,8 @@ class JeopardyGame {
                 div.innerHTML = `
                     <h3>${cat} — ${q.points} pts</h3>
                     <div class="question-inputs">
-                        <textarea class="q-input" placeholder="Escribe la pregunta" data-id="${id}"></textarea>
-                        <textarea class="a-input" placeholder="Escribe la respuesta correcta" data-id="${id}"></textarea>
+                        <textarea class="q-input" placeholder="Pregunta" data-id="${id}"></textarea>
+                        <textarea class="a-input" placeholder="Respuesta" data-id="${id}"></textarea>
                     </div>`;
                 container.appendChild(div);
                 id++;
@@ -584,21 +473,14 @@ class JeopardyGame {
         setTimeout(() => this.generateQR(), 300);
         this.updateLobby();
         this.showScreen('lobby-screen');
-
-        const statusEl = document.getElementById('lobby-status');
-        if (statusEl) {
-            statusEl.textContent = this.isHost ? '' : '⏳ Esperando al host...';
-        }
+        document.getElementById('lobby-status').textContent = this.isHost ? '' : '⏳ Esperando al host...';
     }
 
     generateQR() {
         const container = document.getElementById('qrcode');
         if (!container) return;
         container.innerHTML = '';
-        
-        const baseUrl = window.location.origin + window.location.pathname;
-        const url = `${baseUrl}?room=${this.roomCode}`;
-        
+        const url = window.location.origin + window.location.pathname + '?room=' + this.roomCode;
         try {
             if (typeof QRCode !== 'undefined') {
                 new QRCode(container, {
@@ -609,11 +491,9 @@ class JeopardyGame {
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
                 });
-            } else {
-                container.innerHTML = `<p style="font-size:0.8rem;word-break:break-all;color:#6366f1;">${url}</p>`;
             }
-        } catch (error) {
-            container.innerHTML = `<p style="font-size:0.8rem;word-break:break-all;color:#6366f1;">${url}</p>`;
+        } catch(e) {
+            container.innerHTML = '<p style="font-size:0.8rem;word-break:break-all;">' + url + '</p>';
         }
     }
 
@@ -732,7 +612,6 @@ class JeopardyGame {
         document.getElementById('modal-answer').classList.add('hidden');
         document.getElementById('answer-buttons').style.display = 'flex';
         
-        // Mostrar X solo para el host
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'flex';
         
@@ -752,7 +631,6 @@ class JeopardyGame {
         document.getElementById('modal-answer').classList.add('hidden');
         document.getElementById('answer-buttons').style.display = 'none';
         
-        // Ocultar X para jugadores
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'none';
         
@@ -765,18 +643,12 @@ class JeopardyGame {
             document.getElementById('question-modal').classList.remove('active');
             this.answerRevealed = false;
             this.currentQuestion = null;
-            
-            // Notificar a jugadores que cierren
             this.broadcast({ type: 'close-modal' });
             
             if (this.gameStarted && this.questions.every(q => q.used)) {
                 this.endGame();
             }
         }
-    }
-
-    closeModalForPlayers() {
-        document.getElementById('question-modal').classList.remove('active');
     }
 
     handleAnswer(correct) {
@@ -795,7 +667,6 @@ class JeopardyGame {
         document.getElementById('correct-answer-text').textContent = this.currentQuestion.answer;
         document.getElementById('answer-buttons').style.display = 'none';
         
-        // Mantener X visible para el host
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'flex';
 
@@ -835,7 +706,6 @@ class JeopardyGame {
         document.getElementById('correct-answer-text').textContent = data.answer;
         document.getElementById('answer-buttons').style.display = 'none';
         
-        // Mantener X oculta para jugadores
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'none';
         
@@ -843,7 +713,7 @@ class JeopardyGame {
     }
 
     endGame() {
-        if (!this.isHost && !this.gameStarted) return;
+        if (!this.isHost) return;
         this.gameStarted = false;
         document.getElementById('question-modal').classList.remove('active');
         this.broadcast({ type: 'game-end', players: this.players });
@@ -874,8 +744,7 @@ class JeopardyGame {
             podium.appendChild(card);
         });
 
-        const fullResults = document.getElementById('full-results');
-        if (fullResults) fullResults.classList.add('hidden');
+        document.getElementById('full-results').classList.add('hidden');
         this.showScreen('results-screen');
     }
 
@@ -929,27 +798,19 @@ class JeopardyGame {
         this.isHost = false;
         this.roomCode = '';
 
-        const modal = document.getElementById('question-modal');
-        if (modal) modal.classList.remove('active');
-        const answerBtns = document.getElementById('answer-buttons');
-        if (answerBtns) answerBtns.style.display = 'flex';
-        const joinForm = document.getElementById('join-form');
-        if (joinForm) joinForm.classList.add('hidden');
+        document.getElementById('question-modal').classList.remove('active');
+        document.getElementById('answer-buttons').style.display = 'flex';
+        document.getElementById('join-form').classList.add('hidden');
+        
         const btn = document.getElementById('join-room-submit');
         if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+        
         const confetti = document.getElementById('confetti');
         if (confetti) confetti.innerHTML = '';
         
-        // Restaurar X del modal
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'flex';
 
         this.showScreen('home-screen');
     }
 }
-
-// Inicializar el juego cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM cargado, creando juego...');
-    window.game = new JeopardyGame();
-});
