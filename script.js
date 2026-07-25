@@ -1,11 +1,15 @@
-// Esperar a que el DOM esté completamente cargado
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM cargado, iniciando juego...');
-    window.game = new JeopardyGame();
+    
+    // Verificar si hay parámetro room en la URL (viene del QR)
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromQR = urlParams.get('room');
+    
+    window.game = new JeopardyGame(roomFromQR);
 });
 
 class JeopardyGame {
-    constructor() {
+    constructor(roomFromQR) {
         this.categories = [];
         this.questions = [];
         this.players = [];
@@ -23,19 +27,121 @@ class JeopardyGame {
         this.musicPlaying = false;
         this.playerName = '';
         this.sortedPlayers = [];
+        this.roomFromQR = roomFromQR;
 
-        console.log('Constructor llamado');
         this.setupMusic();
         this.bindEvents();
-        this.showScreen('home-screen');
+        
+        // Restaurar estado si existe
+        if (this.restoreState()) {
+            console.log('Estado restaurado');
+        } else if (roomFromQR) {
+            // Viene de QR, mostrar pantalla de nombre
+            this.showQRJoinScreen(roomFromQR);
+        } else {
+            this.showScreen('home-screen');
+        }
+        
         console.log('Juego inicializado');
     }
 
+    // ==================== PERSISTENCIA ====================
+    
+    saveState() {
+        const state = {
+            categories: this.categories,
+            questions: this.questions,
+            players: this.players,
+            currentPlayer: this.currentPlayer,
+            totalCategories: this.totalCategories,
+            questionsPerCategory: this.questionsPerCategory,
+            gameStarted: this.gameStarted,
+            isHost: this.isHost,
+            roomCode: this.roomCode,
+            currentScreen: this.getCurrentScreen()
+        };
+        localStorage.setItem('jeopardy-state', JSON.stringify(state));
+        console.log('Estado guardado:', state.currentScreen);
+    }
+
+    restoreState() {
+        const saved = localStorage.getItem('jeopardy-state');
+        if (!saved) return false;
+        
+        try {
+            const state = JSON.parse(saved);
+            
+            // Solo restaurar si es el host y tiene un código de sala
+            if (!state.isHost || !state.roomCode) return false;
+            
+            this.categories = state.categories || [];
+            this.questions = state.questions || [];
+            this.players = state.players || [];
+            this.currentPlayer = state.currentPlayer || 0;
+            this.totalCategories = state.totalCategories || 0;
+            this.questionsPerCategory = state.questionsPerCategory || 0;
+            this.gameStarted = state.gameStarted || false;
+            this.isHost = state.isHost;
+            this.roomCode = state.roomCode;
+            this.joinedNames = new Set(this.players.map(p => p.name));
+            
+            // Reconectar
+            this.initPeer(this.roomCode + '-host');
+            
+            // Mostrar la pantalla correcta
+            if (state.currentScreen) {
+                this.showScreen(state.currentScreen);
+                
+                if (state.currentScreen === 'lobby-screen') {
+                    this.updateLobby();
+                } else if (state.currentScreen === 'game-screen') {
+                    this.renderBoard();
+                } else if (state.currentScreen === 'categories-screen') {
+                    this.showCategoriesScreen();
+                } else if (state.currentScreen === 'questions-screen') {
+                    this.showQuestionsScreen();
+                }
+            }
+            
+            return true;
+        } catch (e) {
+            console.error('Error restaurando estado:', e);
+            return false;
+        }
+    }
+
+    clearState() {
+        localStorage.removeItem('jeopardy-state');
+    }
+
+    getCurrentScreen() {
+        const activeScreen = document.querySelector('.screen.active');
+        return activeScreen ? activeScreen.id : 'home-screen';
+    }
+
+    // ==================== QR JOIN ====================
+    
+    showQRJoinScreen(code) {
+        this.roomCode = code;
+        this.isHost = false;
+        
+        // Mostrar formulario de nombre
+        document.getElementById('join-form').classList.remove('hidden');
+        document.getElementById('room-code').value = code;
+        document.getElementById('room-code').disabled = true;
+        document.getElementById('join-player-name').focus();
+        
+        // Ocultar botones de crear/unirse
+        document.querySelector('.home-actions').style.display = 'none';
+        
+        this.showScreen('home-screen');
+    }
+
+    // ==================== MÚSICA Y SONIDOS ====================
+
     setupMusic() {
         this.bgMusic = document.getElementById('bg-music');
-        if (this.bgMusic) {
-            this.bgMusic.volume = 0.15;
-        }
+        if (this.bgMusic) this.bgMusic.volume = 0.15;
     }
 
     playSound(type) {
@@ -69,6 +175,8 @@ class JeopardyGame {
         osc.stop(ctx.currentTime + dur);
     }
 
+    // ==================== EVENTOS ====================
+
     bindEvents() {
         console.log('Vinculando eventos...');
         
@@ -76,25 +184,42 @@ class JeopardyGame {
         this.onClick('create-room-btn', () => this.createRoom());
         this.onClick('join-room-btn', () => {
             document.getElementById('join-form').classList.remove('hidden');
+            document.getElementById('room-code').disabled = false;
+            document.getElementById('room-code').value = '';
+            document.querySelector('.home-actions').style.display = 'flex';
         });
         this.onClick('join-room-submit', () => this.joinRoom());
         this.onClick('cancel-join', () => {
             document.getElementById('join-form').classList.add('hidden');
+            document.querySelector('.home-actions').style.display = 'flex';
+            if (this.roomFromQR) {
+                // Si venía de QR y cancela, recargar sin parámetro
+                window.location.href = window.location.pathname;
+            }
         });
         this.onClick('toggle-music', () => this.toggleMusic());
         
         // Setup
         this.onClick('back-to-home', () => this.disconnect());
         this.onClick('create-board', () => this.createBoard());
-        this.onClick('back-to-setup', () => this.showScreen('setup-screen'));
+        this.onClick('back-to-setup', () => {
+            this.showScreen('setup-screen');
+            this.saveState();
+        });
         
         // Categories
         this.onClick('submit-categories', () => this.submitCategories());
-        this.onClick('back-to-categories', () => this.showCategoriesScreen());
+        this.onClick('back-to-categories', () => {
+            this.showCategoriesScreen();
+            this.saveState();
+        });
         
         // Questions
         this.onClick('submit-questions', () => this.submitQuestions());
-        this.onClick('back-to-questions', () => this.showScreen('questions-screen'));
+        this.onClick('back-to-questions', () => {
+            this.showScreen('questions-screen');
+            this.saveState();
+        });
         
         // Lobby
         this.onClick('start-game-lobby', () => this.startGame());
@@ -127,6 +252,13 @@ class JeopardyGame {
             });
         }
         
+        // Guardar estado antes de recargar
+        window.addEventListener('beforeunload', () => {
+            if (this.isHost && this.roomCode) {
+                this.saveState();
+            }
+        });
+        
         console.log('Eventos vinculados');
     }
 
@@ -149,6 +281,11 @@ class JeopardyGame {
         const lobbyActions = document.getElementById('lobby-host-actions');
         if (hostControls) hostControls.style.display = this.isHost ? 'flex' : 'none';
         if (lobbyActions) lobbyActions.style.display = this.isHost ? 'flex' : 'none';
+        
+        // Guardar estado
+        if (this.isHost) {
+            this.saveState();
+        }
     }
 
     toggleMusic() {
@@ -171,19 +308,26 @@ class JeopardyGame {
         return code;
     }
 
+    // ==================== SALA Y CONEXIÓN ====================
+
     createRoom() {
         console.log('Creando sala...');
+        this.clearState();
         this.isHost = true;
         this.roomCode = this.generateRoomCode();
         this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
         this.joinedNames = new Set(['Host']);
         this.initPeer(this.roomCode + '-host');
         this.showScreen('setup-screen');
+        this.saveState();
     }
 
     joinRoom() {
-        const code = document.getElementById('room-code').value.trim().toUpperCase();
-        const name = document.getElementById('join-player-name').value.trim();
+        const codeInput = document.getElementById('room-code');
+        const nameInput = document.getElementById('join-player-name');
+        
+        const code = codeInput.value.trim().toUpperCase();
+        const name = nameInput.value.trim();
         
         if (!name) return alert('Ingresa tu nombre');
         if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
@@ -195,7 +339,9 @@ class JeopardyGame {
         this.roomCode = code;
         this.isHost = false;
         this.playerName = name;
-        this.initPeer(code + '-' + Date.now());
+        
+        console.log('Intentando unirse a sala:', code, 'como:', name);
+        this.initPeer(code + '-player-' + Date.now());
     }
 
     initPeer(id) {
@@ -204,55 +350,89 @@ class JeopardyGame {
             this.peer = null;
         }
         
-        console.log('Iniciando PeerJS:', id);
+        console.log('Iniciando PeerJS con ID:', id);
         
-        this.peer = new Peer(id, {
-            debug: 0,
+        // Crear Peer con opciones mejoradas
+        const options = {
+            debug: 1,
             config: {
                 'iceServers': [
-                    { urls: 'stun:stun.l.google.com:19302' }
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
                 ]
             }
-        });
+        };
+        
+        this.peer = new Peer(id, options);
 
         this.peer.on('open', (peerId) => {
-            console.log('PeerJS abierto:', peerId);
+            console.log('✅ PeerJS abierto:', peerId);
+            
             if (!this.isHost) {
+                // Conectar al host
                 const hostId = this.roomCode + '-host';
-                console.log('Conectando a host:', hostId);
-                const conn = this.peer.connect(hostId, {
-                    reliable: true,
-                    metadata: { name: this.playerName }
-                });
-                this.handleConnection(conn);
+                console.log('Conectando al host:', hostId);
+                
+                setTimeout(() => {
+                    try {
+                        const conn = this.peer.connect(hostId, {
+                            reliable: true,
+                            metadata: { name: this.playerName }
+                        });
+                        this.handleConnection(conn);
+                    } catch (err) {
+                        console.error('Error al conectar:', err);
+                        this.onConnectionError();
+                    }
+                }, 500);
             }
         });
 
         this.peer.on('connection', (conn) => {
-            console.log('Conexión entrante:', conn.peer);
+            console.log('📞 Conexión entrante:', conn.peer);
             this.handleConnection(conn);
         });
 
         this.peer.on('error', (err) => {
-            console.error('Error PeerJS:', err);
+            console.error('❌ Error PeerJS:', err);
             if (!this.isHost) {
-                alert('Error de conexión. Verifica el código.');
-                const btn = document.getElementById('join-room-submit');
-                if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+                this.onConnectionError();
+            }
+        });
+        
+        this.peer.on('disconnected', () => {
+            console.log('⚠️ Desconectado, reconectando...');
+            if (this.peer && !this.peer.destroyed) {
+                this.peer.reconnect();
             }
         });
     }
 
+    onConnectionError() {
+        alert('No se pudo conectar a la sala. Verifica:\n\n1. Que el código sea correcto\n2. Que el host tenga la sala abierta\n3. Que ambos tengan conexión a internet');
+        const btn = document.getElementById('join-room-submit');
+        if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+    }
+
     handleConnection(conn) {
+        // Verificar duplicados
         if (this.connections.find(c => c.peer === conn.peer)) {
+            console.log('Conexión duplicada, ignorando');
             conn.close();
             return;
         }
+        
         this.connections.push(conn);
+        console.log('Total conexiones:', this.connections.length);
 
         conn.on('open', () => {
-            console.log('Conexión abierta');
+            console.log('🔗 Conexión establecida con:', conn.peer);
+            
             if (this.isHost) {
+                console.log('Enviando welcome a:', conn.peer);
                 conn.send({
                     type: 'welcome',
                     players: this.players,
@@ -264,20 +444,30 @@ class JeopardyGame {
                     currentPlayer: this.currentPlayer
                 });
             } else {
+                console.log('Enviando join-request como:', this.playerName);
                 conn.send({ type: 'join-request', name: this.playerName });
             }
         });
 
-        conn.on('data', (data) => this.handleData(conn, data));
+        conn.on('data', (data) => {
+            console.log('📩 Datos recibidos:', data.type);
+            this.handleData(conn, data);
+        });
 
         conn.on('close', () => {
+            console.log('Conexión cerrada:', conn.peer);
             this.connections = this.connections.filter(c => c !== conn);
             if (this.isHost && conn.metadata?.name) {
                 this.players = this.players.filter(p => p.name !== conn.metadata.name);
                 this.joinedNames.delete(conn.metadata.name);
                 this.broadcastPlayers();
                 this.updateLobby();
+                this.saveState();
             }
+        });
+        
+        conn.on('error', (err) => {
+            console.error('Error en conexión:', err);
         });
     }
 
@@ -285,6 +475,7 @@ class JeopardyGame {
         if (!this.isHost) {
             switch (data.type) {
                 case 'welcome':
+                    console.log('🎉 Bienvenido a la sala!');
                     this.players = data.players || [];
                     this.updateLobby();
                     if (data.gameStarted) {
@@ -296,6 +487,10 @@ class JeopardyGame {
                     }
                     const btn = document.getElementById('join-room-submit');
                     if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+                    // Limpiar parámetro QR de la URL
+                    if (window.location.search) {
+                        window.history.replaceState({}, '', window.location.pathname);
+                    }
                     break;
                 case 'players-update':
                     this.players = data.players;
@@ -325,6 +520,11 @@ class JeopardyGame {
                     this.showResults();
                     this.playSound('win');
                     break;
+                case 'error':
+                    alert(data.message);
+                    const btnErr = document.getElementById('join-room-submit');
+                    if (btnErr) { btnErr.disabled = false; btnErr.textContent = 'Entrar'; }
+                    break;
             }
         } else {
             if (data.type === 'join-request') {
@@ -335,6 +535,8 @@ class JeopardyGame {
 
     handleJoinRequest(conn, data) {
         const name = data.name?.trim();
+        console.log('Solicitud de unión:', name);
+        
         if (!name) return;
         if (this.joinedNames.has(name)) {
             conn.send({ type: 'error', message: 'Nombre ya en uso' });
@@ -345,16 +547,25 @@ class JeopardyGame {
             return;
         }
 
+        console.log('✅ Jugador aceptado:', name);
         this.players.push({ name, score: 0, id: conn.peer, isHost: false });
         this.joinedNames.add(name);
         conn.metadata = { name };
         conn.send({ type: 'join-accepted', players: this.players });
         this.broadcastPlayers();
         this.updateLobby();
+        this.saveState();
     }
 
     broadcast(data) {
-        this.connections.forEach(c => { if (c.open) { try { c.send(data); } catch(e) {} } });
+        console.log('Broadcast:', data.type, 'a', this.connections.length, 'conexiones');
+        this.connections.forEach(c => { 
+            if (c.open) { 
+                try { c.send(data); } catch(e) {
+                    console.error('Error broadcast:', e);
+                }
+            } 
+        });
     }
 
     broadcastPlayers() {
@@ -381,6 +592,8 @@ class JeopardyGame {
         this.renderBoard();
     }
 
+    // ==================== CONFIGURACIÓN (HOST) ====================
+
     createBoard() {
         if (!this.isHost) return;
         this.totalCategories = parseInt(document.getElementById('categories').value);
@@ -389,6 +602,7 @@ class JeopardyGame {
             return alert('2-8 categorías, 1-10 preguntas');
         }
         this.showCategoriesScreen();
+        this.saveState();
     }
 
     showCategoriesScreen() {
@@ -398,7 +612,7 @@ class JeopardyGame {
         for (let i = 0; i < this.totalCategories; i++) {
             const div = document.createElement('div');
             div.className = 'category-input';
-            div.innerHTML = `<label>Categoría ${i + 1}</label><input type="text" class="category-name" placeholder="Ej: Ciencia">`;
+            div.innerHTML = `<label>Categoría ${i + 1}</label><input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}">`;
             container.appendChild(div);
         }
         this.showScreen('categories-screen');
@@ -414,7 +628,10 @@ class JeopardyGame {
             if (!name) { alert(`Nombre para Categoría ${i + 1}`); valid = false; }
             this.categories.push(name);
         });
-        if (valid) this.showQuestionsScreen();
+        if (valid) {
+            this.showQuestionsScreen();
+            this.saveState();
+        }
     }
 
     showQuestionsScreen() {
@@ -425,15 +642,19 @@ class JeopardyGame {
         let id = 0;
         this.categories.forEach(cat => {
             for (let i = 0; i < this.questionsPerCategory; i++) {
-                const q = { id, category: cat, points: (i + 1) * 100, question: '', answer: '', used: false };
-                this.questions.push(q);
+                const existingQ = this.questions.find(q => q.category === cat && q.points === (i + 1) * 100);
+                const q = existingQ || { id, category: cat, points: (i + 1) * 100, question: '', answer: '', used: false };
+                if (!existingQ) {
+                    q.id = id;
+                    this.questions.push(q);
+                }
                 const div = document.createElement('div');
                 div.className = 'question-row';
                 div.innerHTML = `
                     <h3>${cat} — ${q.points} pts</h3>
                     <div class="question-inputs">
-                        <textarea class="q-input" placeholder="Pregunta" data-id="${id}"></textarea>
-                        <textarea class="a-input" placeholder="Respuesta" data-id="${id}"></textarea>
+                        <textarea class="q-input" placeholder="Pregunta" data-id="${q.id}">${q.question}</textarea>
+                        <textarea class="a-input" placeholder="Respuesta" data-id="${q.id}">${q.answer}</textarea>
                     </div>`;
                 container.appendChild(div);
                 id++;
@@ -450,23 +671,30 @@ class JeopardyGame {
 
         qInputs.forEach(input => {
             const id = parseInt(input.dataset.id);
-            this.questions[id].question = input.value.trim();
-            if (!this.questions[id].question) {
-                alert(`Falta pregunta: ${this.questions[id].category} ${this.questions[id].points}pts`);
+            const q = this.questions.find(q => q.id === id);
+            if (q) q.question = input.value.trim();
+            if (!q || !q.question) {
+                alert(`Falta pregunta: ${q?.category || ''} ${q?.points || ''}pts`);
                 valid = false;
             }
         });
         aInputs.forEach(input => {
             const id = parseInt(input.dataset.id);
-            this.questions[id].answer = input.value.trim();
-            if (!this.questions[id].answer) {
-                alert(`Falta respuesta: ${this.questions[id].category} ${this.questions[id].points}pts`);
+            const q = this.questions.find(q => q.id === id);
+            if (q) q.answer = input.value.trim();
+            if (!q || !q.answer) {
+                alert(`Falta respuesta: ${q?.category || ''} ${q?.points || ''}pts`);
                 valid = false;
             }
         });
 
-        if (valid) this.showLobby();
+        if (valid) {
+            this.showLobby();
+            this.saveState();
+        }
     }
+
+    // ==================== LOBBY ====================
 
     showLobby() {
         document.getElementById('room-code-display').textContent = this.roomCode;
@@ -474,13 +702,16 @@ class JeopardyGame {
         this.updateLobby();
         this.showScreen('lobby-screen');
         document.getElementById('lobby-status').textContent = this.isHost ? '' : '⏳ Esperando al host...';
+        this.saveState();
     }
 
     generateQR() {
         const container = document.getElementById('qrcode');
         if (!container) return;
         container.innerHTML = '';
+        // URL con parámetro room
         const url = window.location.origin + window.location.pathname + '?room=' + this.roomCode;
+        console.log('QR URL:', url);
         try {
             if (typeof QRCode !== 'undefined') {
                 new QRCode(container, {
@@ -509,6 +740,8 @@ class JeopardyGame {
         });
     }
 
+    // ==================== JUEGO ====================
+
     startGame() {
         if (!this.isHost) return;
         if (this.players.length < 2) return alert('Mínimo 2 jugadores');
@@ -529,6 +762,7 @@ class JeopardyGame {
 
         this.renderBoard();
         this.showScreen('game-screen');
+        this.saveState();
     }
 
     renderBoard() {
@@ -587,6 +821,7 @@ class JeopardyGame {
                         this.currentPlayer = i;
                         this.renderBoard();
                         this.broadcast({ type: 'game-update', currentPlayer: this.currentPlayer });
+                        this.saveState();
                     }
                 });
             }
@@ -693,6 +928,7 @@ class JeopardyGame {
         });
 
         this.renderBoard();
+        this.saveState();
 
         if (this.questions.every(q => q.used)) {
             setTimeout(() => this.endGame(), 1500);
@@ -720,6 +956,7 @@ class JeopardyGame {
         this.playSound('win');
         this.showResults();
         this.createConfetti();
+        this.clearState();
     }
 
     showResults() {
@@ -786,6 +1023,8 @@ class JeopardyGame {
 
     disconnect() {
         if (this.peer) { this.peer.destroy(); this.peer = null; }
+        this.clearState();
+        
         this.categories = [];
         this.questions = [];
         this.players = [];
@@ -797,19 +1036,29 @@ class JeopardyGame {
         this.answerRevealed = false;
         this.isHost = false;
         this.roomCode = '';
+        this.roomFromQR = null;
 
         document.getElementById('question-modal').classList.remove('active');
         document.getElementById('answer-buttons').style.display = 'flex';
         document.getElementById('join-form').classList.add('hidden');
+        document.querySelector('.home-actions').style.display = 'flex';
         
         const btn = document.getElementById('join-room-submit');
         if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+        
+        const codeInput = document.getElementById('room-code');
+        if (codeInput) { codeInput.disabled = false; codeInput.value = ''; }
         
         const confetti = document.getElementById('confetti');
         if (confetti) confetti.innerHTML = '';
         
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'flex';
+
+        // Limpiar parámetros de URL
+        if (window.location.search) {
+            window.history.replaceState({}, '', window.location.pathname);
+        }
 
         this.showScreen('home-screen');
     }
