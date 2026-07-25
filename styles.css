@@ -4,6 +4,11 @@
     box-sizing: border-box;
 }
 
+#question-modal .close {
+    display: flex; /* Por defecto visible */
+    transition: opacity 0.2s;
+}
+
 :root {
     --bg: #f8fafc;
     --surface: #ffffff;
