@@ -3,141 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌸 Jeopardy Trivia Board - Multijugador</title>
+    <title>Jeopardy Trivia</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- Pantalla de inicio -->
+        <!-- Home -->
         <div id="home-screen" class="screen active">
-            <div class="home-content">
-                <h1>🌸 Jeopardy Trivia Board</h1>
-                <p class="subtitle">¡Juego de preguntas y respuestas multijugador!</p>
-                <div class="home-buttons">
-                    <button id="create-room-btn" class="btn-home">
-                        <i class="fas fa-plus-circle"></i> Crear Sala
-                    </button>
-                    <button id="join-room-btn" class="btn-home">
-                        <i class="fas fa-sign-in-alt"></i> Unirse a Sala
-                    </button>
-                </div>
-                <div id="join-room-form" class="hidden">
-                    <div class="form-group">
-                        <label for="room-code">Código de Sala:</label>
-                        <input type="text" id="room-code" placeholder="Ingresa el código">
-                    </div>
-                    <div class="form-group">
-                        <label for="join-player-name">Tu Nombre:</label>
-                        <input type="text" id="join-player-name" placeholder="Nombre del jugador">
-                    </div>
-                    <button id="join-room-submit" class="btn-primary">Unirse</button>
-                    <button id="cancel-join" class="btn-secondary">Cancelar</button>
+            <h1>Jeopardy Trivia</h1>
+            <p class="subtitle">Juego de preguntas y respuestas</p>
+            <div class="home-actions">
+                <button id="create-room-btn" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Crear Sala
+                </button>
+                <button id="join-room-btn" class="btn btn-secondary">
+                    <i class="fas fa-sign-in-alt"></i> Unirse
+                </button>
+            </div>
+            <div id="join-form" class="hidden">
+                <input type="text" id="room-code" placeholder="Código de sala">
+                <input type="text" id="join-player-name" placeholder="Tu nombre">
+                <div class="form-actions">
+                    <button id="join-room-submit" class="btn btn-primary">Entrar</button>
+                    <button id="cancel-join" class="btn btn-text">Cancelar</button>
                 </div>
             </div>
         </div>
 
-        <!-- Pantalla de configuración -->
+        <!-- Setup -->
         <div id="setup-screen" class="screen">
-            <h1><i class="fas fa-cog"></i> Configurar Tablero</h1>
+            <h2>Configuración</h2>
             <div class="setup-form">
-                <div class="form-group">
-                    <label for="categories">Número de Categorías:</label>
+                <div class="field">
+                    <label>Categorías</label>
                     <input type="number" id="categories" min="2" max="8" value="5">
                 </div>
-                <div class="form-group">
-                    <label for="questions">Preguntas por Categoría:</label>
+                <div class="field">
+                    <label>Preguntas por categoría</label>
                     <input type="number" id="questions" min="2" max="10" value="5">
                 </div>
-                <div class="button-group">
-                    <button id="back-to-home" class="btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Volver
-                    </button>
-                    <button id="create-board" class="btn-primary">Crear Tablero</button>
-                </div>
+            </div>
+            <div class="actions">
+                <button id="back-to-home" class="btn btn-text">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </button>
+                <button id="create-board" class="btn btn-primary">Crear</button>
             </div>
         </div>
 
-        <!-- Pantalla de categorías -->
+        <!-- Categories -->
         <div id="categories-screen" class="screen">
-            <h2>Nombra tus Categorías</h2>
+            <h2>Categorías</h2>
             <div id="category-inputs"></div>
-            <div class="button-group">
-                <button id="back-to-setup" class="btn-secondary">
+            <div class="actions">
+                <button id="back-to-setup" class="btn btn-text">
                     <i class="fas fa-arrow-left"></i> Volver
                 </button>
-                <button id="submit-categories" class="btn-primary">Siguiente</button>
+                <button id="submit-categories" class="btn btn-primary">Siguiente</button>
             </div>
         </div>
 
-        <!-- Pantalla de preguntas -->
+        <!-- Questions -->
         <div id="questions-screen" class="screen">
-            <h2>Configurar Preguntas y Respuestas</h2>
+            <h2>Preguntas y Respuestas</h2>
             <div id="questions-container"></div>
-            <div class="button-group">
-                <button id="back-to-categories" class="btn-secondary">
+            <div class="actions">
+                <button id="back-to-categories" class="btn btn-text">
                     <i class="fas fa-arrow-left"></i> Volver
                 </button>
-                <button id="submit-questions" class="btn-primary">Finalizar Tablero</button>
+                <button id="submit-questions" class="btn btn-primary">Finalizar</button>
             </div>
         </div>
 
-        <!-- Pantalla de sala de espera -->
+        <!-- Lobby -->
         <div id="lobby-screen" class="screen">
-            <h2><i class="fas fa-users"></i> Sala de Espera</h2>
-            <div class="room-info">
-                <h3>Código de Sala: <span id="room-code-display"></span></h3>
-                <p>Comparte este código con los jugadores</p>
+            <h2>Sala de Espera</h2>
+            <div class="room-code">
+                <span>Código:</span>
+                <strong id="room-code-display"></strong>
             </div>
+            <p class="hint">Comparte este código para que otros se unan</p>
             <div id="lobby-players-list"></div>
-            <div class="button-group">
-                <button id="back-to-questions" class="btn-secondary">
+            <div class="actions">
+                <button id="back-to-questions" class="btn btn-text">
                     <i class="fas fa-arrow-left"></i> Volver
                 </button>
-                <button id="start-game-lobby" class="btn-primary">Iniciar Juego</button>
+                <button id="start-game-lobby" class="btn btn-primary">Iniciar</button>
             </div>
         </div>
 
-        <!-- Pantalla de juego -->
+        <!-- Game -->
         <div id="game-screen" class="screen">
             <div class="game-header">
-                <h1>🌸 Jeopardy Trivia Board</h1>
-                <button id="end-game" class="btn-danger">Finalizar Juego</button>
+                <h1>Jeopardy</h1>
+                <button id="end-game" class="btn btn-danger">Finalizar</button>
             </div>
             <div id="game-board"></div>
             <div id="players-bar"></div>
         </div>
 
-        <!-- Modal de pregunta -->
+        <!-- Modal -->
         <div id="question-modal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2 id="modal-category"></h2>
-                <div id="modal-question"></div>
-                <div class="answer-buttons" id="answer-buttons">
-                    <button id="btn-correct" class="btn-success">
+                <h3 id="modal-category"></h3>
+                <p id="modal-question"></p>
+                <div class="modal-actions" id="answer-buttons">
+                    <button id="btn-correct" class="btn btn-success">
                         <i class="fas fa-check"></i> Correcto
                     </button>
-                    <button id="btn-incorrect" class="btn-danger">
+                    <button id="btn-incorrect" class="btn btn-danger">
                         <i class="fas fa-times"></i> Incorrecto
                     </button>
                 </div>
                 <div id="modal-answer" class="hidden">
-                    <h3>Respuesta correcta:</h3>
+                    <p class="answer-label">Respuesta:</p>
                     <p id="correct-answer-text"></p>
                 </div>
             </div>
         </div>
 
-        <!-- Pantalla de resultados -->
+        <!-- Results -->
         <div id="results-screen" class="screen">
-            <h2><i class="fas fa-trophy"></i> Resultados Finales</h2>
-            <div id="podium-container">
-                <div id="top-three"></div>
-            </div>
+            <h2>Resultados</h2>
+            <div id="podium"></div>
+            <button id="show-full-results" class="btn btn-secondary">Ver todos</button>
             <div id="full-results" class="hidden"></div>
-            <button id="show-full-results" class="btn-secondary">Ver Resultados Completos</button>
-            <button id="new-game" class="btn-primary">Nuevo Juego</button>
+            <button id="new-game" class="btn btn-primary">Nuevo Juego</button>
         </div>
     </div>
 
