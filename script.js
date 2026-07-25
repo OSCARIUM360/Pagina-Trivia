@@ -28,25 +28,23 @@ class JeopardyGame {
         document.addEventListener('click', () => this.tryPlayMusic(), { once: true });
     }
 
-    // ==================== SONIDOS Y MÚSICA ====================
-
     setupMusic() {
         this.bgMusic = document.getElementById('bg-music');
-        this.bgMusic.volume = 0.15;
+        if (this.bgMusic) this.bgMusic.volume = 0.15;
     }
 
     tryPlayMusic() {
-        if (!this.musicPlaying) {
+        if (!this.musicPlaying && this.bgMusic) {
             this.bgMusic.play().catch(() => {});
         }
     }
 
     toggleMusic() {
         if (this.musicPlaying) {
-            this.bgMusic.pause();
+            if (this.bgMusic) this.bgMusic.pause();
             document.getElementById('toggle-music').innerHTML = '<i class="fas fa-music"></i>';
         } else {
-            this.bgMusic.play().catch(() => {});
+            if (this.bgMusic) this.bgMusic.play().catch(() => {});
             document.getElementById('toggle-music').innerHTML = '<i class="fas fa-volume-up"></i>';
         }
         this.musicPlaying = !this.musicPlaying;
@@ -83,8 +81,6 @@ class JeopardyGame {
         osc.stop(ctx.currentTime + dur);
     }
 
-    // ==================== EVENTOS ====================
-
     bindEvents() {
         document.getElementById('create-room-btn').addEventListener('click', () => this.createRoom());
         document.getElementById('join-room-btn').addEventListener('click', () => {
@@ -110,7 +106,7 @@ class JeopardyGame {
         document.getElementById('new-game').addEventListener('click', () => this.disconnect());
         document.getElementById('toggle-music').addEventListener('click', () => this.toggleMusic());
         
-        // Permitir unirse con Enter
+        // Enter para unirse
         document.getElementById('room-code').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') document.getElementById('join-player-name').focus();
         });
@@ -118,8 +114,6 @@ class JeopardyGame {
             if (e.key === 'Enter') this.joinRoom();
         });
     }
-
-    // ==================== NAVEGACIÓN ====================
 
     showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -129,41 +123,63 @@ class JeopardyGame {
     }
 
     updateUIForRole() {
-        document.getElementById('host-controls').style.display = this.isHost ? 'flex' : 'none';
-        document.getElementById('lobby-host-actions').style.display = this.isHost ? 'flex' : 'none';
+        const hostControls = document.getElementById('host-controls');
+        const lobbyActions = document.getElementById('lobby-host-actions');
+        if (hostControls) hostControls.style.display = this.isHost ? 'flex' : 'none';
+        if (lobbyActions) lobbyActions.style.display = this.isHost ? 'flex' : 'none';
     }
 
-    // ==================== SALA / CONEXIÓN ====================
-
-    // CORREGIDO: generar código alfanumérico de 6 caracteres
+    // ==================== GENERAR CÓDIGO SIMPLE ====================
+    
     generateRoomCode() {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        // Código de 6 caracteres: solo letras mayúsculas y números
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Sin I, O, 0, 1 para evitar confusiones
         let code = '';
         for (let i = 0; i < 6; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
+        console.log('Código generado:', code);
         return code;
     }
 
+    // ==================== CREAR SALA ====================
+    
     createRoom() {
         this.isHost = true;
-        this.roomCode = this.generateRoomCode(); // CORREGIDO
+        this.roomCode = this.generateRoomCode();
         this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
         this.joinedNames = new Set(['Host']);
-        this.initPeer(this.roomCode + '-host');
+        
+        console.log('Creando sala con código:', this.roomCode);
+        
+        // Iniciar PeerJS como host
+        const hostPeerId = this.roomCode + '-host';
+        this.initPeer(hostPeerId);
         this.showScreen('setup-screen');
     }
 
+    // ==================== UNIRSE A SALA ====================
+    
     joinRoom() {
-        const code = document.getElementById('room-code').value.trim().toUpperCase();
+        // Obtener y limpiar el código
+        let code = document.getElementById('room-code').value.trim().toUpperCase();
         const name = document.getElementById('join-player-name').value.trim();
         
-        // CORREGIDO: validación para código alfanumérico
-        if (!code || code.length !== 6) {
-            return alert('Ingresa un código válido de 6 caracteres');
+        console.log('Intentando unirse - Código:', code, 'Nombre:', name);
+        
+        // Validar nombre
+        if (!name) {
+            alert('Por favor, ingresa tu nombre');
+            return;
         }
-        if (!name) return alert('Ingresa tu nombre');
-
+        
+        // Validar código - ACEPTAR CUALQUIER CÓDIGO DE 6 CARACTERES
+        if (!code || code.length !== 6) {
+            alert('El código debe tener exactamente 6 caracteres. Código ingresado: "' + code + '"');
+            return;
+        }
+        
+        // Deshabilitar botón
         const btn = document.getElementById('join-room-submit');
         btn.disabled = true;
         btn.textContent = 'Conectando...';
@@ -171,37 +187,69 @@ class JeopardyGame {
         this.roomCode = code;
         this.isHost = false;
         this.playerName = name;
-        this.initPeer(code + '-' + Date.now());
+        
+        // Conectar como jugador
+        const playerPeerId = code + '-' + Date.now();
+        this.initPeer(playerPeerId);
     }
 
+    // ==================== PEERJS ====================
+    
     initPeer(id) {
-        if (this.peer) this.peer.destroy();
-        this.peer = new Peer(id, { debug: 0 });
+        if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
+        }
+        
+        console.log('Iniciando PeerJS con ID:', id);
+        
+        this.peer = new Peer(id, {
+            debug: 2, // Más debug para ver qué pasa
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
 
-        this.peer.on('open', () => {
-            console.log('Conectado con ID:', id);
+        this.peer.on('open', (peerId) => {
+            console.log('✅ PeerJS conectado exitosamente. Mi ID:', peerId);
+            
             if (!this.isHost) {
-                const conn = this.peer.connect(this.roomCode + '-host', {
+                // Soy jugador: conectar al host
+                const hostPeerId = this.roomCode + '-host';
+                console.log('Conectando al host:', hostPeerId);
+                
+                const conn = this.peer.connect(hostPeerId, {
                     reliable: true,
                     metadata: { name: this.playerName }
                 });
+                
                 this.handleConnection(conn);
             }
         });
 
-        this.peer.on('connection', (conn) => this.handleConnection(conn));
+        this.peer.on('connection', (conn) => {
+            console.log('📞 Nueva conexión entrante de:', conn.peer);
+            this.handleConnection(conn);
+        });
 
         this.peer.on('error', (err) => {
-            console.error('Error PeerJS:', err);
+            console.error('❌ Error PeerJS:', err);
+            
             if (!this.isHost) {
-                alert('No se pudo conectar. Verifica el código de sala.');
-                document.getElementById('join-room-submit').disabled = false;
-                document.getElementById('join-room-submit').textContent = 'Entrar';
+                alert('Error de conexión: ' + err.message + '\n\nVerifica que el código de sala sea correcto y que el host tenga la sala abierta.');
+                const btn = document.getElementById('join-room-submit');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Entrar';
+                }
             }
         });
         
         this.peer.on('disconnected', () => {
-            console.log('Peer desconectado, reconectando...');
+            console.log('⚠️ Peer desconectado, intentando reconectar...');
             if (this.peer && !this.peer.destroyed) {
                 this.peer.reconnect();
             }
@@ -209,17 +257,23 @@ class JeopardyGame {
     }
 
     handleConnection(conn) {
-        if (this.connections.find(c => c.peer === conn.peer)) {
+        // Verificar duplicados
+        const existingConn = this.connections.find(c => c.peer === conn.peer);
+        if (existingConn) {
             console.log('Conexión duplicada, cerrando:', conn.peer);
             conn.close();
             return;
         }
+        
         this.connections.push(conn);
+        console.log('Total de conexiones:', this.connections.length);
 
         conn.on('open', () => {
-            console.log('Conexión abierta con:', conn.peer);
+            console.log('🔗 Conexión abierta con:', conn.peer);
+            
             if (this.isHost) {
-                conn.send({
+                // Enviar bienvenida al jugador
+                const welcomeData = {
                     type: 'welcome',
                     players: this.players,
                     gameStarted: this.gameStarted,
@@ -228,13 +282,21 @@ class JeopardyGame {
                     totalCategories: this.totalCategories,
                     questionsPerCategory: this.questionsPerCategory,
                     currentPlayer: this.currentPlayer
-                });
+                };
+                console.log('Enviando welcome:', welcomeData);
+                conn.send(welcomeData);
             } else {
-                conn.send({ type: 'join-request', name: this.playerName });
+                // Soy jugador: enviar solicitud de unión
+                const joinData = { type: 'join-request', name: this.playerName };
+                console.log('Enviando join-request:', joinData);
+                conn.send(joinData);
             }
         });
 
-        conn.on('data', (data) => this.handleData(conn, data));
+        conn.on('data', (data) => {
+            console.log('📩 Datos recibidos:', data);
+            this.handleData(conn, data);
+        });
 
         conn.on('close', () => {
             console.log('Conexión cerrada:', conn.peer);
@@ -253,9 +315,13 @@ class JeopardyGame {
     }
 
     handleData(conn, data) {
+        console.log('Procesando datos. Soy host:', this.isHost, 'Tipo:', data.type);
+        
         if (!this.isHost) {
+            // SOY JUGADOR
             switch (data.type) {
                 case 'welcome':
+                    console.log('🎉 Bienvenido a la sala!');
                     this.players = data.players || [];
                     this.updateLobby();
                     if (data.gameStarted) {
@@ -264,6 +330,12 @@ class JeopardyGame {
                         this.showScreen('game-screen');
                     } else {
                         this.showLobby();
+                    }
+                    // Restaurar botón
+                    const btn = document.getElementById('join-room-submit');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Entrar';
                     }
                     break;
                 case 'players-update':
@@ -291,9 +363,19 @@ class JeopardyGame {
                     this.showResults();
                     this.playSound('win');
                     break;
+                case 'error':
+                    alert('Error: ' + data.message);
+                    const btnErr = document.getElementById('join-room-submit');
+                    if (btnErr) {
+                        btnErr.disabled = false;
+                        btnErr.textContent = 'Entrar';
+                    }
+                    break;
             }
         } else {
+            // SOY HOST
             if (data.type === 'join-request') {
+                console.log('Solicitud de unión de:', data.name);
                 this.handleJoinRequest(conn, data);
             }
         }
@@ -301,24 +383,48 @@ class JeopardyGame {
 
     handleJoinRequest(conn, data) {
         const name = data.name?.trim();
-        if (!name) return conn.send({ type: 'error', message: 'Nombre inválido' });
-        if (this.joinedNames.has(name)) return conn.send({ type: 'error', message: 'Nombre ya en uso' });
-        if (this.gameStarted) return conn.send({ type: 'error', message: 'Juego en curso' });
+        console.log('Procesando join request para:', name);
+        
+        if (!name) {
+            console.log('Nombre inválido');
+            conn.send({ type: 'error', message: 'Nombre inválido' });
+            return;
+        }
+        
+        if (this.joinedNames.has(name)) {
+            console.log('Nombre duplicado:', name);
+            conn.send({ type: 'error', message: 'Este nombre ya está en uso. Elige otro.' });
+            return;
+        }
+        
+        if (this.gameStarted) {
+            console.log('Juego ya iniciado');
+            conn.send({ type: 'error', message: 'El juego ya comenzó. No puedes unirte ahora.' });
+            return;
+        }
 
+        console.log('✅ Jugador aceptado:', name);
         const player = { name, score: 0, id: conn.peer, isHost: false };
         this.players.push(player);
         this.joinedNames.add(name);
         conn.metadata = { name };
+        
+        // Confirmar al jugador
         conn.send({ type: 'join-accepted', players: this.players });
+        
+        // Notificar a todos
         this.broadcastPlayers();
         this.updateLobby();
     }
 
     broadcast(data) {
+        console.log('Broadcasting:', data.type);
         this.connections.forEach(c => { 
             if (c.open) { 
-                try { c.send(data); } catch(e) {
-                    console.error('Error al enviar:', e);
+                try { 
+                    c.send(data); 
+                } catch(e) {
+                    console.error('Error al enviar broadcast:', e);
                 }
             } 
         });
@@ -329,12 +435,12 @@ class JeopardyGame {
     }
 
     loadGameState(data) {
-        this.categories = data.categories;
-        this.questions = data.questions;
-        this.players = data.players;
-        this.totalCategories = data.totalCategories;
-        this.questionsPerCategory = data.questionsPerCategory;
-        this.currentPlayer = data.currentPlayer;
+        this.categories = data.categories || [];
+        this.questions = data.questions || [];
+        this.players = data.players || [];
+        this.totalCategories = data.totalCategories || 0;
+        this.questionsPerCategory = data.questionsPerCategory || 0;
+        this.currentPlayer = data.currentPlayer || 0;
         this.gameStarted = true;
     }
 
@@ -441,8 +547,7 @@ class JeopardyGame {
 
     showLobby() {
         document.getElementById('room-code-display').textContent = this.roomCode;
-        // CORREGIDO: generar QR con delay para asegurar que el DOM esté listo
-        setTimeout(() => this.generateQR(), 100);
+        setTimeout(() => this.generateQR(), 200);
         this.updateLobby();
         this.showScreen('lobby-screen');
 
@@ -456,34 +561,30 @@ class JeopardyGame {
     generateQR() {
         const container = document.getElementById('qrcode');
         if (!container) return;
-        
-        // Limpiar contenedor
         container.innerHTML = '';
         
-        // Crear URL para el QR
         const baseUrl = window.location.origin + window.location.pathname;
         const url = `${baseUrl}?room=${this.roomCode}`;
         
         console.log('Generando QR para:', url);
         
         try {
-            // Usar QRCode con opciones correctas
-            new QRCode(container, {
-                text: url,
-                width: 150,
-                height: 150,
-                colorDark: '#1e293b',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            console.log('QR generado exitosamente');
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(container, {
+                    text: url,
+                    width: 150,
+                    height: 150,
+                    colorDark: '#1e293b',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                console.log('QR generado');
+            } else {
+                throw new Error('QRCode no disponible');
+            }
         } catch (error) {
-            console.error('Error al generar QR:', error);
-            // Fallback: mostrar enlace como texto
-            container.innerHTML = `
-                <div style="padding: 10px; text-align: center;">
-                    <p style="font-size: 0.8rem; word-break: break-all; color: #6366f1;">${url}</p>
-                </div>`;
+            console.error('Error QR:', error);
+            container.innerHTML = `<p style="font-size:0.8rem;word-break:break-all;color:#6366f1;">${url}</p>`;
         }
     }
 
@@ -494,7 +595,7 @@ class JeopardyGame {
         this.players.forEach(p => {
             const tag = document.createElement('div');
             tag.className = 'player-tag' + (p.isHost ? ' host' : '');
-            tag.innerHTML = (p.isHost ? '<span class="crown">👑</span> ' : '') + p.name;
+            tag.innerHTML = (p.isHost ? '👑 ' : '') + p.name;
             container.appendChild(tag);
         });
     }
@@ -525,6 +626,7 @@ class JeopardyGame {
 
     renderBoard() {
         const board = document.getElementById('game-board');
+        if (!board) return;
         board.innerHTML = '';
         board.style.gridTemplateColumns = `repeat(${this.totalCategories + 1}, 1fr)`;
 
@@ -565,6 +667,7 @@ class JeopardyGame {
 
     renderPlayers() {
         const bar = document.getElementById('players-bar');
+        if (!bar) return;
         bar.innerHTML = '';
         this.players.forEach((p, i) => {
             const div = document.createElement('div');
@@ -685,13 +788,10 @@ class JeopardyGame {
         if (data.players) this.players = data.players;
     }
 
-    // ==================== FIN DEL JUEGO ====================
-
     endGame() {
         if (!this.isHost && !this.gameStarted) return;
         this.gameStarted = false;
         document.getElementById('question-modal').classList.remove('active');
-
         this.broadcast({ type: 'game-end', players: this.players });
         this.playSound('win');
         this.showResults();
@@ -703,6 +803,7 @@ class JeopardyGame {
         this.sortedPlayers = sorted;
 
         const podium = document.getElementById('podium');
+        if (!podium) return;
         podium.innerHTML = '';
 
         const top = sorted.slice(0, 3);
@@ -715,10 +816,7 @@ class JeopardyGame {
             const card = document.createElement('div');
             card.className = `result-card ${pos === 1 ? 'first' : pos === 2 ? 'second' : 'third'}`;
             const emoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉';
-            card.innerHTML = `
-                <div class="pos">${emoji} #${pos}</div>
-                <div class="name">${p.name}</div>
-                <div class="pts">${p.score} pts</div>`;
+            card.innerHTML = `<div class="pos">${emoji} #${pos}</div><div class="name">${p.name}</div><div class="pts">${p.score} pts</div>`;
             podium.appendChild(card);
         });
 
@@ -728,15 +826,13 @@ class JeopardyGame {
 
     toggleFullResults() {
         const el = document.getElementById('full-results');
+        if (!el) return;
         if (el.classList.contains('hidden')) {
             el.innerHTML = '<h3>Clasificación Completa</h3>';
             this.sortedPlayers.forEach((p, i) => {
                 const row = document.createElement('div');
                 row.className = 'result-row';
-                row.innerHTML = `
-                    <span class="rank">#${i + 1}</span>
-                    <span class="name-col">${p.name}</span>
-                    <span class="pts-col">${p.score} pts</span>`;
+                row.innerHTML = `<span class="rank">#${i + 1}</span><span class="name-col">${p.name}</span><span class="pts-col">${p.score} pts</span>`;
                 el.appendChild(row);
             });
             el.classList.remove('hidden');
@@ -764,8 +860,6 @@ class JeopardyGame {
         setTimeout(() => { container.innerHTML = ''; }, 5000);
     }
 
-    // ==================== LIMPIEZA ====================
-
     disconnect() {
         if (this.peer) { this.peer.destroy(); this.peer = null; }
         this.categories = [];
@@ -780,9 +874,12 @@ class JeopardyGame {
         this.isHost = false;
         this.roomCode = '';
 
-        document.getElementById('question-modal').classList.remove('active');
-        document.getElementById('answer-buttons').style.display = 'flex';
-        document.getElementById('join-form').classList.add('hidden');
+        const modal = document.getElementById('question-modal');
+        if (modal) modal.classList.remove('active');
+        const answerBtns = document.getElementById('answer-buttons');
+        if (answerBtns) answerBtns.style.display = 'flex';
+        const joinForm = document.getElementById('join-form');
+        if (joinForm) joinForm.classList.add('hidden');
         const btn = document.getElementById('join-room-submit');
         if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
         const confetti = document.getElementById('confetti');
