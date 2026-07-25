@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM cargado, iniciando juego...');
     
-    // Verificar si hay parámetro room en la URL (viene del QR)
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromQR = urlParams.get('room');
     
@@ -32,11 +31,9 @@ class JeopardyGame {
         this.setupMusic();
         this.bindEvents();
         
-        // Restaurar estado si existe
         if (this.restoreState()) {
             console.log('Estado restaurado');
         } else if (roomFromQR) {
-            // Viene de QR, mostrar pantalla de nombre
             this.showQRJoinScreen(roomFromQR);
         } else {
             this.showScreen('home-screen');
@@ -61,7 +58,6 @@ class JeopardyGame {
             currentScreen: this.getCurrentScreen()
         };
         localStorage.setItem('jeopardy-state', JSON.stringify(state));
-        console.log('Estado guardado:', state.currentScreen);
     }
 
     restoreState() {
@@ -70,8 +66,6 @@ class JeopardyGame {
         
         try {
             const state = JSON.parse(saved);
-            
-            // Solo restaurar si es el host y tiene un código de sala
             if (!state.isHost || !state.roomCode) return false;
             
             this.categories = state.categories || [];
@@ -85,24 +79,15 @@ class JeopardyGame {
             this.roomCode = state.roomCode;
             this.joinedNames = new Set(this.players.map(p => p.name));
             
-            // Reconectar
             this.initPeer(this.roomCode + '-host');
             
-            // Mostrar la pantalla correcta
             if (state.currentScreen) {
                 this.showScreen(state.currentScreen);
-                
-                if (state.currentScreen === 'lobby-screen') {
-                    this.updateLobby();
-                } else if (state.currentScreen === 'game-screen') {
-                    this.renderBoard();
-                } else if (state.currentScreen === 'categories-screen') {
-                    this.showCategoriesScreen();
-                } else if (state.currentScreen === 'questions-screen') {
-                    this.showQuestionsScreen();
-                }
+                if (state.currentScreen === 'lobby-screen') this.updateLobby();
+                else if (state.currentScreen === 'game-screen') this.renderBoard();
+                else if (state.currentScreen === 'categories-screen') this.showCategoriesScreen();
+                else if (state.currentScreen === 'questions-screen') this.showQuestionsScreen();
             }
-            
             return true;
         } catch (e) {
             console.error('Error restaurando estado:', e);
@@ -115,8 +100,8 @@ class JeopardyGame {
     }
 
     getCurrentScreen() {
-        const activeScreen = document.querySelector('.screen.active');
-        return activeScreen ? activeScreen.id : 'home-screen';
+        const active = document.querySelector('.screen.active');
+        return active ? active.id : 'home-screen';
     }
 
     // ==================== QR JOIN ====================
@@ -124,16 +109,12 @@ class JeopardyGame {
     showQRJoinScreen(code) {
         this.roomCode = code;
         this.isHost = false;
-        
-        // Mostrar formulario de nombre
         document.getElementById('join-form').classList.remove('hidden');
         document.getElementById('room-code').value = code;
         document.getElementById('room-code').disabled = true;
         document.getElementById('join-player-name').focus();
-        
-        // Ocultar botones de crear/unirse
         document.querySelector('.home-actions').style.display = 'none';
-        
+        document.querySelector('.trivia-actions').style.display = 'none';
         this.showScreen('home-screen');
     }
 
@@ -178,8 +159,6 @@ class JeopardyGame {
     // ==================== EVENTOS ====================
 
     bindEvents() {
-        console.log('Vinculando eventos...');
-        
         // Home
         this.onClick('create-room-btn', () => this.createRoom());
         this.onClick('join-room-btn', () => {
@@ -187,39 +166,39 @@ class JeopardyGame {
             document.getElementById('room-code').disabled = false;
             document.getElementById('room-code').value = '';
             document.querySelector('.home-actions').style.display = 'flex';
+            document.querySelector('.trivia-actions').style.display = 'flex';
         });
         this.onClick('join-room-submit', () => this.joinRoom());
         this.onClick('cancel-join', () => {
             document.getElementById('join-form').classList.add('hidden');
             document.querySelector('.home-actions').style.display = 'flex';
-            if (this.roomFromQR) {
-                // Si venía de QR y cancela, recargar sin parámetro
-                window.location.href = window.location.pathname;
-            }
+            document.querySelector('.trivia-actions').style.display = 'flex';
+            if (this.roomFromQR) window.location.href = window.location.pathname;
         });
         this.onClick('toggle-music', () => this.toggleMusic());
+        
+        // Trivia load
+        this.onClick('load-trivia-btn', () => {
+            document.getElementById('load-trivia-form').classList.remove('hidden');
+        });
+        this.onClick('load-trivia-submit', () => this.importTrivia());
+        this.onClick('cancel-load-trivia', () => {
+            document.getElementById('load-trivia-form').classList.add('hidden');
+        });
         
         // Setup
         this.onClick('back-to-home', () => this.disconnect());
         this.onClick('create-board', () => this.createBoard());
-        this.onClick('back-to-setup', () => {
-            this.showScreen('setup-screen');
-            this.saveState();
-        });
+        this.onClick('back-to-setup', () => { this.showScreen('setup-screen'); this.saveState(); });
         
         // Categories
         this.onClick('submit-categories', () => this.submitCategories());
-        this.onClick('back-to-categories', () => {
-            this.showCategoriesScreen();
-            this.saveState();
-        });
+        this.onClick('back-to-categories', () => { this.showCategoriesScreen(); this.saveState(); });
         
         // Questions
         this.onClick('submit-questions', () => this.submitQuestions());
-        this.onClick('back-to-questions', () => {
-            this.showScreen('questions-screen');
-            this.saveState();
-        });
+        this.onClick('back-to-questions', () => { this.showScreen('questions-screen'); this.saveState(); });
+        this.onClick('export-trivia', () => this.exportTrivia());
         
         // Lobby
         this.onClick('start-game-lobby', () => this.startGame());
@@ -230,46 +209,30 @@ class JeopardyGame {
         // Modal
         this.onClick('btn-correct', () => this.handleAnswer(true));
         this.onClick('btn-incorrect', () => this.handleAnswer(false));
-        
         const closeBtn = document.querySelector('#question-modal .close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
+        if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());
         
         // Results
         this.onClick('show-full-results', () => this.toggleFullResults());
         this.onClick('new-game', () => this.disconnect());
         
-        // Enter para unirse
+        // Enter keys
         const roomInput = document.getElementById('room-code');
         const nameInput = document.getElementById('join-player-name');
         if (roomInput && nameInput) {
-            roomInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') nameInput.focus();
-            });
-            nameInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') this.joinRoom();
-            });
+            roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') nameInput.focus(); });
+            nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.joinRoom(); });
         }
         
-        // Guardar estado antes de recargar
         window.addEventListener('beforeunload', () => {
-            if (this.isHost && this.roomCode) {
-                this.saveState();
-            }
+            if (this.isHost && this.roomCode) this.saveState();
         });
-        
-        console.log('Eventos vinculados');
     }
 
     onClick(id, handler) {
         const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', handler);
-            console.log('✓ Evento:', id);
-        } else {
-            console.error('✗ No encontrado:', id);
-        }
+        if (el) el.addEventListener('click', handler);
+        else console.error('No encontrado:', id);
     }
 
     showScreen(id) {
@@ -282,19 +245,17 @@ class JeopardyGame {
         if (hostControls) hostControls.style.display = this.isHost ? 'flex' : 'none';
         if (lobbyActions) lobbyActions.style.display = this.isHost ? 'flex' : 'none';
         
-        // Guardar estado
-        if (this.isHost) {
-            this.saveState();
-        }
+        if (this.isHost) this.saveState();
     }
 
     toggleMusic() {
+        const btn = document.getElementById('toggle-music');
         if (this.musicPlaying) {
             if (this.bgMusic) this.bgMusic.pause();
-            document.getElementById('toggle-music').innerHTML = '<i class="fas fa-music"></i>';
+            if (btn) btn.innerHTML = '<i class="fas fa-music"></i>';
         } else {
             if (this.bgMusic) this.bgMusic.play().catch(() => {});
-            document.getElementById('toggle-music').innerHTML = '<i class="fas fa-volume-up"></i>';
+            if (btn) btn.innerHTML = '<i class="fas fa-volume-up"></i>';
         }
         this.musicPlaying = !this.musicPlaying;
     }
@@ -302,16 +263,13 @@ class JeopardyGame {
     generateRoomCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let code = '';
-        for (let i = 0; i < 6; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
+        for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
         return code;
     }
 
     // ==================== SALA Y CONEXIÓN ====================
 
     createRoom() {
-        console.log('Creando sala...');
         this.clearState();
         this.isHost = true;
         this.roomCode = this.generateRoomCode();
@@ -323,12 +281,8 @@ class JeopardyGame {
     }
 
     joinRoom() {
-        const codeInput = document.getElementById('room-code');
-        const nameInput = document.getElementById('join-player-name');
-        
-        const code = codeInput.value.trim().toUpperCase();
-        const name = nameInput.value.trim();
-        
+        const code = document.getElementById('room-code').value.trim().toUpperCase();
+        const name = document.getElementById('join-player-name').value.trim();
         if (!name) return alert('Ingresa tu nombre');
         if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
 
@@ -339,100 +293,57 @@ class JeopardyGame {
         this.roomCode = code;
         this.isHost = false;
         this.playerName = name;
-        
-        console.log('Intentando unirse a sala:', code, 'como:', name);
         this.initPeer(code + '-player-' + Date.now());
     }
 
     initPeer(id) {
-        if (this.peer) {
-            this.peer.destroy();
-            this.peer = null;
-        }
+        if (this.peer) { this.peer.destroy(); this.peer = null; }
         
-        console.log('Iniciando PeerJS con ID:', id);
-        
-        // Crear Peer con opciones mejoradas
-        const options = {
-            debug: 1,
+        this.peer = new Peer(id, {
+            debug: 0,
             config: {
                 'iceServers': [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' }
                 ]
             }
-        };
-        
-        this.peer = new Peer(id, options);
+        });
 
         this.peer.on('open', (peerId) => {
-            console.log('✅ PeerJS abierto:', peerId);
-            
+            console.log('PeerJS abierto:', peerId);
             if (!this.isHost) {
-                // Conectar al host
-                const hostId = this.roomCode + '-host';
-                console.log('Conectando al host:', hostId);
-                
                 setTimeout(() => {
-                    try {
-                        const conn = this.peer.connect(hostId, {
-                            reliable: true,
-                            metadata: { name: this.playerName }
-                        });
-                        this.handleConnection(conn);
-                    } catch (err) {
-                        console.error('Error al conectar:', err);
-                        this.onConnectionError();
-                    }
+                    const conn = this.peer.connect(this.roomCode + '-host', {
+                        reliable: true,
+                        metadata: { name: this.playerName }
+                    });
+                    this.handleConnection(conn);
                 }, 500);
             }
         });
 
-        this.peer.on('connection', (conn) => {
-            console.log('📞 Conexión entrante:', conn.peer);
-            this.handleConnection(conn);
-        });
+        this.peer.on('connection', (conn) => this.handleConnection(conn));
 
         this.peer.on('error', (err) => {
-            console.error('❌ Error PeerJS:', err);
+            console.error('Error PeerJS:', err);
             if (!this.isHost) {
-                this.onConnectionError();
+                alert('Error de conexión. Verifica el código.');
+                const btn = document.getElementById('join-room-submit');
+                if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
             }
         });
         
         this.peer.on('disconnected', () => {
-            console.log('⚠️ Desconectado, reconectando...');
-            if (this.peer && !this.peer.destroyed) {
-                this.peer.reconnect();
-            }
+            if (this.peer && !this.peer.destroyed) this.peer.reconnect();
         });
     }
 
-    onConnectionError() {
-        alert('No se pudo conectar a la sala. Verifica:\n\n1. Que el código sea correcto\n2. Que el host tenga la sala abierta\n3. Que ambos tengan conexión a internet');
-        const btn = document.getElementById('join-room-submit');
-        if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-    }
-
     handleConnection(conn) {
-        // Verificar duplicados
-        if (this.connections.find(c => c.peer === conn.peer)) {
-            console.log('Conexión duplicada, ignorando');
-            conn.close();
-            return;
-        }
-        
+        if (this.connections.find(c => c.peer === conn.peer)) { conn.close(); return; }
         this.connections.push(conn);
-        console.log('Total conexiones:', this.connections.length);
 
         conn.on('open', () => {
-            console.log('🔗 Conexión establecida con:', conn.peer);
-            
             if (this.isHost) {
-                console.log('Enviando welcome a:', conn.peer);
                 conn.send({
                     type: 'welcome',
                     players: this.players,
@@ -444,18 +355,13 @@ class JeopardyGame {
                     currentPlayer: this.currentPlayer
                 });
             } else {
-                console.log('Enviando join-request como:', this.playerName);
                 conn.send({ type: 'join-request', name: this.playerName });
             }
         });
 
-        conn.on('data', (data) => {
-            console.log('📩 Datos recibidos:', data.type);
-            this.handleData(conn, data);
-        });
+        conn.on('data', (data) => this.handleData(conn, data));
 
         conn.on('close', () => {
-            console.log('Conexión cerrada:', conn.peer);
             this.connections = this.connections.filter(c => c !== conn);
             if (this.isHost && conn.metadata?.name) {
                 this.players = this.players.filter(p => p.name !== conn.metadata.name);
@@ -465,54 +371,26 @@ class JeopardyGame {
                 this.saveState();
             }
         });
-        
-        conn.on('error', (err) => {
-            console.error('Error en conexión:', err);
-        });
     }
 
     handleData(conn, data) {
         if (!this.isHost) {
             switch (data.type) {
                 case 'welcome':
-                    console.log('🎉 Bienvenido a la sala!');
                     this.players = data.players || [];
                     this.updateLobby();
-                    if (data.gameStarted) {
-                        this.loadGameState(data);
-                        this.renderBoard();
-                        this.showScreen('game-screen');
-                    } else {
-                        this.showLobby();
-                    }
+                    if (data.gameStarted) { this.loadGameState(data); this.renderBoard(); this.showScreen('game-screen'); }
+                    else this.showLobby();
                     const btn = document.getElementById('join-room-submit');
                     if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-                    // Limpiar parámetro QR de la URL
-                    if (window.location.search) {
-                        window.history.replaceState({}, '', window.location.pathname);
-                    }
+                    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
                     break;
-                case 'players-update':
-                    this.players = data.players;
-                    this.updateLobby();
-                    break;
-                case 'game-start':
-                    this.loadGameState(data);
-                    this.renderBoard();
-                    this.showScreen('game-screen');
-                    break;
-                case 'game-update':
-                    this.applyGameUpdate(data);
-                    break;
-                case 'question-selected':
-                    this.showQuestionForPlayers(data);
-                    break;
-                case 'answer-result':
-                    this.showAnswerForPlayers(data);
-                    break;
-                case 'close-modal':
-                    document.getElementById('question-modal').classList.remove('active');
-                    break;
+                case 'players-update': this.players = data.players; this.updateLobby(); break;
+                case 'game-start': this.loadGameState(data); this.renderBoard(); this.showScreen('game-screen'); break;
+                case 'game-update': this.applyGameUpdate(data); break;
+                case 'question-selected': this.showQuestionForPlayers(data); break;
+                case 'answer-result': this.showAnswerForPlayers(data); break;
+                case 'close-modal': document.getElementById('question-modal').classList.remove('active'); break;
                 case 'game-end':
                     this.players = data.players;
                     this.gameStarted = false;
@@ -520,34 +398,19 @@ class JeopardyGame {
                     this.showResults();
                     this.playSound('win');
                     break;
-                case 'error':
-                    alert(data.message);
-                    const btnErr = document.getElementById('join-room-submit');
-                    if (btnErr) { btnErr.disabled = false; btnErr.textContent = 'Entrar'; }
-                    break;
+                case 'error': alert(data.message); break;
             }
         } else {
-            if (data.type === 'join-request') {
-                this.handleJoinRequest(conn, data);
-            }
+            if (data.type === 'join-request') this.handleJoinRequest(conn, data);
         }
     }
 
     handleJoinRequest(conn, data) {
         const name = data.name?.trim();
-        console.log('Solicitud de unión:', name);
-        
         if (!name) return;
-        if (this.joinedNames.has(name)) {
-            conn.send({ type: 'error', message: 'Nombre ya en uso' });
-            return;
-        }
-        if (this.gameStarted) {
-            conn.send({ type: 'error', message: 'Juego en curso' });
-            return;
-        }
+        if (this.joinedNames.has(name)) { conn.send({ type: 'error', message: 'Nombre ya en uso' }); return; }
+        if (this.gameStarted) { conn.send({ type: 'error', message: 'Juego en curso' }); return; }
 
-        console.log('✅ Jugador aceptado:', name);
         this.players.push({ name, score: 0, id: conn.peer, isHost: false });
         this.joinedNames.add(name);
         conn.metadata = { name };
@@ -558,19 +421,10 @@ class JeopardyGame {
     }
 
     broadcast(data) {
-        console.log('Broadcast:', data.type, 'a', this.connections.length, 'conexiones');
-        this.connections.forEach(c => { 
-            if (c.open) { 
-                try { c.send(data); } catch(e) {
-                    console.error('Error broadcast:', e);
-                }
-            } 
-        });
+        this.connections.forEach(c => { if (c.open) { try { c.send(data); } catch(e) {} } });
     }
 
-    broadcastPlayers() {
-        this.broadcast({ type: 'players-update', players: this.players });
-    }
+    broadcastPlayers() { this.broadcast({ type: 'players-update', players: this.players }); }
 
     loadGameState(data) {
         this.categories = data.categories || [];
@@ -598,9 +452,8 @@ class JeopardyGame {
         if (!this.isHost) return;
         this.totalCategories = parseInt(document.getElementById('categories').value);
         this.questionsPerCategory = parseInt(document.getElementById('questions').value);
-        if (this.totalCategories < 2 || this.totalCategories > 8 || this.questionsPerCategory < 1 || this.questionsPerCategory > 10) {
+        if (this.totalCategories < 2 || this.totalCategories > 8 || this.questionsPerCategory < 1 || this.questionsPerCategory > 10)
             return alert('2-8 categorías, 1-10 preguntas');
-        }
         this.showCategoriesScreen();
         this.saveState();
     }
@@ -628,33 +481,33 @@ class JeopardyGame {
             if (!name) { alert(`Nombre para Categoría ${i + 1}`); valid = false; }
             this.categories.push(name);
         });
-        if (valid) {
-            this.showQuestionsScreen();
-            this.saveState();
-        }
+        if (valid) { this.showQuestionsScreen(); this.saveState(); }
     }
 
     showQuestionsScreen() {
         if (!this.isHost) return;
         const container = document.getElementById('questions-container');
         container.innerHTML = '';
+        
+        // Preservar preguntas existentes
+        const existingQuestions = [...this.questions];
         this.questions = [];
         let id = 0;
+        
         this.categories.forEach(cat => {
             for (let i = 0; i < this.questionsPerCategory; i++) {
-                const existingQ = this.questions.find(q => q.category === cat && q.points === (i + 1) * 100);
-                const q = existingQ || { id, category: cat, points: (i + 1) * 100, question: '', answer: '', used: false };
-                if (!existingQ) {
-                    q.id = id;
-                    this.questions.push(q);
-                }
+                const existing = existingQuestions.find(q => q.category === cat && q.points === (i + 1) * 100);
+                const q = existing || { id, category: cat, points: (i + 1) * 100, question: '', answer: '', used: false };
+                q.id = id;
+                this.questions.push(q);
+                
                 const div = document.createElement('div');
                 div.className = 'question-row';
                 div.innerHTML = `
                     <h3>${cat} — ${q.points} pts</h3>
                     <div class="question-inputs">
-                        <textarea class="q-input" placeholder="Pregunta" data-id="${q.id}">${q.question}</textarea>
-                        <textarea class="a-input" placeholder="Respuesta" data-id="${q.id}">${q.answer}</textarea>
+                        <textarea class="q-input" placeholder="Pregunta" data-id="${id}">${q.question || ''}</textarea>
+                        <textarea class="a-input" placeholder="Respuesta" data-id="${id}">${q.answer || ''}</textarea>
                     </div>`;
                 container.appendChild(div);
                 id++;
@@ -673,25 +526,122 @@ class JeopardyGame {
             const id = parseInt(input.dataset.id);
             const q = this.questions.find(q => q.id === id);
             if (q) q.question = input.value.trim();
-            if (!q || !q.question) {
-                alert(`Falta pregunta: ${q?.category || ''} ${q?.points || ''}pts`);
-                valid = false;
-            }
+            if (!q || !q.question) { alert(`Falta pregunta`); valid = false; }
         });
         aInputs.forEach(input => {
             const id = parseInt(input.dataset.id);
             const q = this.questions.find(q => q.id === id);
             if (q) q.answer = input.value.trim();
-            if (!q || !q.answer) {
-                alert(`Falta respuesta: ${q?.category || ''} ${q?.points || ''}pts`);
-                valid = false;
-            }
+            if (!q || !q.answer) { alert(`Falta respuesta`); valid = false; }
         });
 
-        if (valid) {
+        if (valid) { this.showLobby(); this.saveState(); }
+    }
+
+    // ==================== EXPORTAR / IMPORTAR ====================
+
+    exportTrivia() {
+        if (!this.isHost) return;
+        if (this.questions.length === 0) return alert('Primero crea las preguntas');
+        
+        const hasEmpty = this.questions.some(q => !q.question || !q.answer);
+        if (hasEmpty) return alert('Completa todas las preguntas y respuestas');
+        
+        const triviaData = {
+            version: 1,
+            categories: this.categories,
+            questionsPerCategory: this.questionsPerCategory,
+            questions: this.questions.map(q => ({
+                category: q.category,
+                points: q.points,
+                question: q.question,
+                answer: q.answer
+            }))
+        };
+        
+        const jsonStr = JSON.stringify(triviaData);
+        const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+        const code = 'JPTV' + base64;
+        
+        this.copyToClipboard(code);
+        this.showToast('✅ ¡Código copiado! Pega este código para cargar la trivia');
+    }
+
+    importTrivia() {
+        const codeInput = document.getElementById('trivia-code-input');
+        const code = codeInput.value.trim();
+        
+        if (!code) return alert('Pega el código de la trivia');
+        if (!code.startsWith('JPTV')) return alert('Código inválido. Debe comenzar con "JPTV"');
+        
+        try {
+            const base64 = code.substring(4);
+            const jsonStr = decodeURIComponent(escape(atob(base64)));
+            const triviaData = JSON.parse(jsonStr);
+            
+            if (!triviaData.categories || !triviaData.questions || !triviaData.questionsPerCategory)
+                throw new Error('Formato inválido');
+            
+            this.isHost = true;
+            this.categories = triviaData.categories;
+            this.totalCategories = triviaData.categories.length;
+            this.questionsPerCategory = triviaData.questionsPerCategory;
+            this.questions = triviaData.questions.map((q, i) => ({
+                id: i,
+                category: q.category,
+                points: q.points,
+                question: q.question,
+                answer: q.answer,
+                used: false
+            }));
+            
+            this.roomCode = this.generateRoomCode();
+            this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true }];
+            this.joinedNames = new Set(['Host']);
+            this.gameStarted = false;
+            
+            document.getElementById('load-trivia-form').classList.add('hidden');
+            codeInput.value = '';
+            
+            this.initPeer(this.roomCode + '-host');
             this.showLobby();
             this.saveState();
+            this.showToast('✅ ¡Trivia cargada! ' + this.totalCategories + ' categorías, ' + this.questions.length + ' preguntas');
+        } catch (error) {
+            console.error('Error al importar:', error);
+            alert('Error al cargar la trivia. Verifica que el código esté completo.');
         }
+    }
+
+    copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text));
+        } else {
+            this.fallbackCopy(text);
+        }
+    }
+
+    fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try { document.execCommand('copy'); } catch (err) {}
+        document.body.removeChild(textarea);
+    }
+
+    showToast(message) {
+        const existing = document.querySelector('.export-toast');
+        if (existing) existing.remove();
+        
+        const toast = document.createElement('div');
+        toast.className = 'export-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
     }
 
     // ==================== LOBBY ====================
@@ -709,9 +659,7 @@ class JeopardyGame {
         const container = document.getElementById('qrcode');
         if (!container) return;
         container.innerHTML = '';
-        // URL con parámetro room
         const url = window.location.origin + window.location.pathname + '?room=' + this.roomCode;
-        console.log('QR URL:', url);
         try {
             if (typeof QRCode !== 'undefined') {
                 new QRCode(container, {
@@ -794,10 +742,7 @@ class JeopardyGame {
                 const cell = document.createElement('div');
                 cell.className = `game-cell ${q?.used ? 'used' : 'clickable'}`;
                 cell.textContent = q?.used ? '✓' : (i + 1) * 100;
-
-                if (!q?.used && this.isHost) {
-                    cell.addEventListener('click', () => this.selectQuestion(q));
-                }
+                if (!q?.used && this.isHost) cell.addEventListener('click', () => this.selectQuestion(q));
                 board.appendChild(cell);
             });
         }
@@ -831,9 +776,8 @@ class JeopardyGame {
 
     updateTurnIndicator() {
         const indicator = document.getElementById('turn-indicator');
-        if (indicator && this.players[this.currentPlayer]) {
-            indicator.textContent = `🕹️ Turno de: ${this.players[this.currentPlayer].name}`;
-        }
+        if (indicator && this.players[this.currentPlayer])
+            indicator.textContent = `🎯 Turno de: ${this.players[this.currentPlayer].name}`;
     }
 
     selectQuestion(q) {
@@ -851,13 +795,7 @@ class JeopardyGame {
         if (closeBtn) closeBtn.style.display = 'flex';
         
         document.getElementById('question-modal').classList.add('active');
-
-        this.broadcast({
-            type: 'question-selected',
-            category: q.category,
-            points: q.points,
-            question: q.question
-        });
+        this.broadcast({ type: 'question-selected', category: q.category, points: q.points, question: q.question });
     }
 
     showQuestionForPlayers(data) {
@@ -865,10 +803,8 @@ class JeopardyGame {
         document.getElementById('modal-question').textContent = data.question;
         document.getElementById('modal-answer').classList.add('hidden');
         document.getElementById('answer-buttons').style.display = 'none';
-        
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'none';
-        
         document.getElementById('question-modal').classList.add('active');
     }
 
@@ -879,22 +815,16 @@ class JeopardyGame {
             this.answerRevealed = false;
             this.currentQuestion = null;
             this.broadcast({ type: 'close-modal' });
-            
-            if (this.gameStarted && this.questions.every(q => q.used)) {
-                this.endGame();
-            }
+            if (this.gameStarted && this.questions.every(q => q.used)) this.endGame();
         }
     }
 
     handleAnswer(correct) {
         if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
-
         this.answerRevealed = true;
         this.playSound(correct ? 'correct' : 'incorrect');
 
-        if (correct) {
-            this.players[this.currentPlayer].score += this.currentQuestion.points;
-        }
+        if (correct) this.players[this.currentPlayer].score += this.currentQuestion.points;
 
         const answerDiv = document.getElementById('modal-answer');
         answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
@@ -906,8 +836,7 @@ class JeopardyGame {
         if (closeBtn) closeBtn.style.display = 'flex';
 
         this.broadcast({
-            type: 'answer-result',
-            correct,
+            type: 'answer-result', correct,
             answer: this.currentQuestion.answer,
             playerName: this.players[this.currentPlayer].name,
             pointsAwarded: correct ? this.currentQuestion.points : 0,
@@ -915,24 +844,13 @@ class JeopardyGame {
         });
 
         this.currentQuestion.used = true;
+        do { this.currentPlayer = (this.currentPlayer + 1) % this.players.length; }
+        while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
 
-        do {
-            this.currentPlayer = (this.currentPlayer + 1) % this.players.length;
-        } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
-
-        this.broadcast({
-            type: 'game-update',
-            questionId: this.currentQuestion.id,
-            players: this.players,
-            currentPlayer: this.currentPlayer
-        });
-
+        this.broadcast({ type: 'game-update', questionId: this.currentQuestion.id, players: this.players, currentPlayer: this.currentPlayer });
         this.renderBoard();
         this.saveState();
-
-        if (this.questions.every(q => q.used)) {
-            setTimeout(() => this.endGame(), 1500);
-        }
+        if (this.questions.every(q => q.used)) setTimeout(() => this.endGame(), 1500);
     }
 
     showAnswerForPlayers(data) {
@@ -941,10 +859,8 @@ class JeopardyGame {
         answerDiv.classList.add(data.correct ? 'correct-anim' : 'incorrect-anim');
         document.getElementById('correct-answer-text').textContent = data.answer;
         document.getElementById('answer-buttons').style.display = 'none';
-        
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'none';
-        
         if (data.players) this.players = data.players;
     }
 
@@ -962,7 +878,6 @@ class JeopardyGame {
     showResults() {
         const sorted = [...this.players].sort((a, b) => b.score - a.score);
         this.sortedPlayers = sorted;
-
         const podium = document.getElementById('podium');
         if (!podium) return;
         podium.innerHTML = '';
@@ -1041,25 +956,22 @@ class JeopardyGame {
         document.getElementById('question-modal').classList.remove('active');
         document.getElementById('answer-buttons').style.display = 'flex';
         document.getElementById('join-form').classList.add('hidden');
+        document.getElementById('load-trivia-form').classList.add('hidden');
         document.querySelector('.home-actions').style.display = 'flex';
+        document.querySelector('.trivia-actions').style.display = 'flex';
         
         const btn = document.getElementById('join-room-submit');
         if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-        
         const codeInput = document.getElementById('room-code');
         if (codeInput) { codeInput.disabled = false; codeInput.value = ''; }
-        
+        const triviaInput = document.getElementById('trivia-code-input');
+        if (triviaInput) triviaInput.value = '';
         const confetti = document.getElementById('confetti');
         if (confetti) confetti.innerHTML = '';
-        
         const closeBtn = document.querySelector('#question-modal .close');
         if (closeBtn) closeBtn.style.display = 'flex';
 
-        // Limpiar parámetros de URL
-        if (window.location.search) {
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-
+        if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
         this.showScreen('home-screen');
     }
 }
