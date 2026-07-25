@@ -179,10 +179,15 @@ class JeopardyGame {
         
         // Trivia load
         this.onClick('load-trivia-btn', () => {
+            console.log('Click en cargar trivia');
             document.getElementById('load-trivia-form').classList.remove('hidden');
         });
-        this.onClick('load-trivia-submit', () => this.importTrivia());
+        this.onClick('load-trivia-submit', () => {
+            console.log('Click en submit cargar trivia');
+            this.importTrivia();
+        });
         this.onClick('cancel-load-trivia', () => {
+            console.log('Click en cancelar carga');
             document.getElementById('load-trivia-form').classList.add('hidden');
         });
         
@@ -198,7 +203,10 @@ class JeopardyGame {
         // Questions
         this.onClick('submit-questions', () => this.submitQuestions());
         this.onClick('back-to-questions', () => { this.showScreen('questions-screen'); this.saveState(); });
-        this.onClick('export-trivia', () => this.exportTrivia());
+        this.onClick('export-trivia', () => {
+            console.log('Click en exportar trivia');
+            this.exportTrivia();
+        });
         
         // Lobby
         this.onClick('start-game-lobby', () => this.startGame());
