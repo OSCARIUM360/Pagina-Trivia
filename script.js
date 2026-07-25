@@ -832,7 +832,7 @@ class JeopardyGame {
     updateTurnIndicator() {
         const indicator = document.getElementById('turn-indicator');
         if (indicator && this.players[this.currentPlayer]) {
-            indicator.textContent = `🎯 Turno de: ${this.players[this.currentPlayer].name}`;
+            indicator.textContent = `🕹️ Turno de: ${this.players[this.currentPlayer].name}`;
         }
     }
 
