@@ -10,7 +10,6 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <!-- Música de fondo -->
     <audio id="bg-music" loop>
         <source src="https://cdn.pixabay.com/audio/2022/03/10/audio_a3f9d8c84e.mp3" type="audio/mpeg">
     </audio>
@@ -91,18 +90,7 @@
         <!-- Questions (host) -->
         <div id="questions-screen" class="screen">
             <h2><i class="fas fa-question-circle"></i> Preguntas y Respuestas</h2>
-            <div class="ai-section card">
-                <p><i class="fas fa-robot"></i> <strong>Generar con IA</strong></p>
-                <p class="hint">La IA generará preguntas basadas en tus categorías</p>
-                <div class="input-group">
-                    <label>API Key de OpenAI (opcional, usa la integrada si no tienes)</label>
-                    <input type="password" id="openai-key" placeholder="sk-... (dejar vacío para usar generación local)">
-                </div>
-                <button id="generate-ai" class="btn btn-secondary">
-                    <i class="fas fa-magic"></i> Generar Preguntas con IA
-                </button>
-                <div id="ai-status" class="hidden"></div>
-            </div>
+            <p class="hint">Escribe las preguntas y respuestas para cada categoría</p>
             <div id="questions-container"></div>
             <div class="actions">
                 <button id="back-to-categories" class="btn btn-text">
@@ -170,7 +158,6 @@
                 <div id="modal-answer" class="hidden answer-reveal">
                     <p class="answer-label">Respuesta correcta:</p>
                     <p id="correct-answer-text"></p>
-                    <div id="answer-animation"></div>
                 </div>
             </div>
         </div>
