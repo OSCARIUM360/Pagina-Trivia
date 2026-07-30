@@ -567,6 +567,13 @@ class JeopardyGame {
             case 'game-update':
                 this.applyGameUpdate(data);
                 break;
+                case 'timer-stopped':
+                // Ocultar timer para los jugadores
+                const playerTimerEl = document.getElementById('player-modal-timer');
+                if (playerTimerEl) {
+                    playerTimerEl.style.display = 'none';
+                }
+                break;
                 
             case 'question-selected':
                 document.getElementById('player-answer-modal').classList.remove('active');
@@ -594,7 +601,7 @@ class JeopardyGame {
                 this.updatePlayerTimer(data.seconds, data.isWarning);
                 break;
                 
-            case 'clear-player-selections': // [NUEVO] Limpiar selecciones
+            case 'clear-player-selections':
                 this.clearPlayerSelections();
                 break;
                 
@@ -646,6 +653,15 @@ class JeopardyGame {
         } else if (data.type === 'player-select-question') {
             this.handlePlayerSelectQuestion(conn, data);
         } else if (data.type === 'player-answer') {
+            // [NUEVO] Detener timer cuando el jugador envía respuesta
+            if (this.timerEnabled) {
+                this.stopTimer();
+                // Notificar a los jugadores que el timer se detuvo
+                this.broadcast({
+                    type: 'timer-stopped'
+                });
+            }
+            
             this.playerAnswer = data.answer;
             document.getElementById('player-answer-section').classList.remove('hidden');
             document.getElementById('player-answer-text').textContent = '"' + data.answer + '"';
@@ -1567,7 +1583,6 @@ class JeopardyGame {
         typeBadge.classList.add('hidden');
     }
     
-    // [CORREGIDO] Si es el HOST, mostrar la respuesta correcta SIEMPRE
     if (this.isHost && data.correctAnswer) {
         const answerDiv = document.getElementById('modal-answer');
         answerDiv.classList.remove('hidden');
@@ -1594,6 +1609,16 @@ class JeopardyGame {
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
+            // [NUEVO] Mostrar el timer para el jugador que tiene el turno
+            if (this.timerEnabled) {
+                const playerTimerEl = document.getElementById('player-modal-timer');
+                if (playerTimerEl) {
+                    const seconds = this.timerSeconds > 0 ? this.timerSeconds : 25;
+                    playerTimerEl.textContent = `⏱️ ${seconds}s`;
+                    playerTimerEl.style.display = 'block';
+                }
+            }
+            
             setTimeout(() => {
                 this.showPlayerAnswerModal({
                     category: data.category,
@@ -1629,8 +1654,8 @@ class JeopardyGame {
     document.getElementById('player-modal-options').classList.add('hidden');
     document.getElementById('player-modal-anagram').classList.add('hidden');
     
-    // [CORREGIDO] Mostrar timer al jugador si está activo
-    if (this.timerEnabled && this.timerSeconds > 0) {
+    // [CORREGIDO] Mostrar timer al jugador SIEMPRE que esté activo
+    if (this.timerEnabled) {
         let playerTimerEl = document.getElementById('player-modal-timer');
         if (!playerTimerEl) {
             const playerModalContent = document.querySelector('#player-answer-modal .modal-content');
@@ -1646,9 +1671,10 @@ class JeopardyGame {
             }
         }
         if (playerTimerEl) {
-            playerTimerEl.textContent = `⏱️ ${this.timerSeconds}s`;
+            const seconds = this.timerSeconds > 0 ? this.timerSeconds : 0;
+            playerTimerEl.textContent = `⏱️ ${seconds}s`;
             playerTimerEl.style.display = 'block';
-            if (this.timerSeconds <= 5) {
+            if (seconds <= 5 && seconds > 0) {
                 playerTimerEl.style.color = '#ef4444';
                 playerTimerEl.style.animation = 'pulse 0.5s infinite';
             } else {
@@ -1826,7 +1852,6 @@ class JeopardyGame {
     handleAnswer(correct) {
     if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
     
-    // [NUEVO] Detener temporizador
     this.stopTimer();
     
     this.answerRevealed = true;
@@ -2270,7 +2295,7 @@ updateTimerDisplay(seconds) {
         }
     }
     
-    // [CORREGIDO] Mostrar en el modal del jugador
+    // [CORREGIDO] Mostrar en el modal del jugador SIEMPRE
     let playerTimerEl = document.getElementById('player-modal-timer');
     if (!playerTimerEl) {
         const playerModalContent = document.querySelector('#player-answer-modal .modal-content');
@@ -2503,12 +2528,11 @@ handleTimerJump(data) {
     
     document.getElementById('player-answer-modal').classList.remove('active');
     
-    // [CORREGIDO] Si el jugador actual es el que tiene el turno, actualizar su timer
     if (!this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer && data.questionType) {
-            // Actualizar el timer en el modal del jugador
-            if (this.timerEnabled && this.timerSeconds > 0) {
+            // [NUEVO] Mostrar el timer reiniciado para el jugador
+            if (this.timerEnabled) {
                 const playerTimerEl = document.getElementById('player-modal-timer');
                 if (playerTimerEl) {
                     playerTimerEl.textContent = `⏱️ ${this.timerSeconds}s`;
@@ -2527,6 +2551,12 @@ handleTimerJump(data) {
                     correctAnswer: data.correctAnswer
                 });
             }, 500);
+        } else {
+            // [NUEVO] Si no es el turno del jugador, ocultar el timer
+            const playerTimerEl = document.getElementById('player-modal-timer');
+            if (playerTimerEl) {
+                playerTimerEl.style.display = 'none';
+            }
         }
     }
 }
@@ -2536,7 +2566,13 @@ handleTimerTimeoutAll(data) {
     if (data.currentPlayer !== undefined) this.currentPlayer = data.currentPlayer;
     this.renderBoard();
     
+    // Ocultar timer para todos los jugadores
     if (!this.isHost) {
+        const playerTimerEl = document.getElementById('player-modal-timer');
+        if (playerTimerEl) {
+            playerTimerEl.style.display = 'none';
+        }
+        
         const answerDiv = document.getElementById('modal-answer');
         answerDiv.classList.remove('hidden');
         answerDiv.className = 'answer-reveal incorrect-anim';
@@ -2559,19 +2595,21 @@ toggleTimerSettings(show) {
     }
 }
 
-// [NUEVO] Actualizar timer para jugadores
-// [NUEVO] Actualizar timer para jugadores
 updatePlayerTimer(seconds, isWarning) {
     const playerTimerEl = document.getElementById('player-modal-timer');
     if (playerTimerEl) {
-        playerTimerEl.textContent = `⏱️ ${seconds}s`;
-        playerTimerEl.style.display = 'block';
-        if (isWarning) {
-            playerTimerEl.style.color = '#ef4444';
-            playerTimerEl.style.animation = 'pulse 0.5s infinite';
+        if (seconds !== undefined && seconds !== null) {
+            playerTimerEl.textContent = `⏱️ ${seconds}s`;
+            playerTimerEl.style.display = 'block';
+            if (isWarning) {
+                playerTimerEl.style.color = '#ef4444';
+                playerTimerEl.style.animation = 'pulse 0.5s infinite';
+            } else {
+                playerTimerEl.style.color = '';
+                playerTimerEl.style.animation = '';
+            }
         } else {
-            playerTimerEl.style.color = '';
-            playerTimerEl.style.animation = '';
+            playerTimerEl.style.display = 'none';
         }
     }
 }
