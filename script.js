@@ -590,7 +590,7 @@ class JeopardyGame {
                 this.handleTimerTimeoutAll(data);
                 break;
                 
-            case 'timer-update': // [NUEVO] Actualización del temporizador
+            case 'timer-update':
                 this.updatePlayerTimer(data.seconds, data.isWarning);
                 break;
                 
@@ -1469,6 +1469,12 @@ class JeopardyGame {
     
     document.getElementById('question-modal').classList.add('active');
     
+    // [CORREGIDO] Mostrar respuesta correcta al host SIEMPRE
+    const answerDiv = document.getElementById('modal-answer');
+    answerDiv.classList.remove('hidden');
+    answerDiv.className = 'answer-reveal';
+    document.getElementById('correct-answer-text').textContent = '🔑 Respuesta correcta: ' + q.answer;
+    
     if (this.timerEnabled) {
         this.startTimer(q.type);
     }
@@ -1480,7 +1486,7 @@ class JeopardyGame {
         question: q.question || 'Ordena las letras para formar la palabra correcta',
         qType: q.type || 'text',
         currentPlayer: this.currentPlayer,
-        correctAnswer: q.answer // [NUEVO] Enviar respuesta correcta al host
+        correctAnswer: q.answer
     };
     
     if (q.type === 'options' && this.currentShuffledOptions) {
@@ -1561,19 +1567,21 @@ class JeopardyGame {
         typeBadge.classList.add('hidden');
     }
     
-    // [NUEVO] Si es el HOST, mostrar la respuesta correcta siempre
+    // [CORREGIDO] Si es el HOST, mostrar la respuesta correcta SIEMPRE
     if (this.isHost && data.correctAnswer) {
         const answerDiv = document.getElementById('modal-answer');
         answerDiv.classList.remove('hidden');
         answerDiv.className = 'answer-reveal';
         document.getElementById('correct-answer-text').textContent = '🔑 Respuesta correcta: ' + data.correctAnswer;
         document.getElementById('answer-buttons').style.display = 'flex';
+        document.getElementById('btn-correct').style.display = 'inline-flex';
+        document.getElementById('btn-incorrect').style.display = 'inline-flex';
     } else {
         document.getElementById('answer-buttons').style.display = 'none';
+        document.getElementById('btn-correct').style.display = 'none';
+        document.getElementById('btn-incorrect').style.display = 'none';
     }
     
-    document.getElementById('btn-correct').style.display = 'none';
-    document.getElementById('btn-incorrect').style.display = 'none';
     document.getElementById('btn-jump').classList.add('hidden');
     
     const closeBtn = document.querySelector('#question-modal .close');
@@ -1620,6 +1628,38 @@ class JeopardyGame {
     document.getElementById('player-answer-status').classList.add('hidden');
     document.getElementById('player-modal-options').classList.add('hidden');
     document.getElementById('player-modal-anagram').classList.add('hidden');
+    
+    // [CORREGIDO] Mostrar timer al jugador si está activo
+    if (this.timerEnabled && this.timerSeconds > 0) {
+        let playerTimerEl = document.getElementById('player-modal-timer');
+        if (!playerTimerEl) {
+            const playerModalContent = document.querySelector('#player-answer-modal .modal-content');
+            if (playerModalContent) {
+                const div = document.createElement('div');
+                div.id = 'player-modal-timer';
+                div.className = 'timer-display';
+                const questionEl = document.getElementById('player-modal-question');
+                if (questionEl) {
+                    questionEl.parentNode.insertBefore(div, questionEl.nextSibling);
+                }
+                playerTimerEl = document.getElementById('player-modal-timer');
+            }
+        }
+        if (playerTimerEl) {
+            playerTimerEl.textContent = `⏱️ ${this.timerSeconds}s`;
+            playerTimerEl.style.display = 'block';
+            if (this.timerSeconds <= 5) {
+                playerTimerEl.style.color = '#ef4444';
+                playerTimerEl.style.animation = 'pulse 0.5s infinite';
+            } else {
+                playerTimerEl.style.color = '';
+                playerTimerEl.style.animation = '';
+            }
+        }
+    } else {
+        const playerTimerEl = document.getElementById('player-modal-timer');
+        if (playerTimerEl) playerTimerEl.style.display = 'none';
+    }
     
     if (data.type === 'options' && data.options) {
         const optDiv = document.getElementById('player-modal-options');
@@ -1677,7 +1717,6 @@ class JeopardyGame {
     jumpQuestion() {
     if (!this.isHost || !this.jumpEnabled || !this.currentQuestion || this.answerRevealed) return;
     
-    // [NUEVO] Detener temporizador
     this.stopTimer();
     
     this.playSound('jump');
@@ -1701,6 +1740,14 @@ class JeopardyGame {
     this.renderBoard();
     this.updateManualPointsPanel();
     
+    // [CORREGIDO] Mostrar respuesta correcta al host
+    if (this.currentQuestion) {
+        const answerDiv = document.getElementById('modal-answer');
+        answerDiv.classList.remove('hidden');
+        answerDiv.className = 'answer-reveal';
+        document.getElementById('correct-answer-text').textContent = '🔑 Respuesta correcta: ' + this.currentQuestion.answer;
+    }
+    
     this.broadcast({
         type: 'jump-notification',
         playerName: this.players[this.currentPlayer].name,
@@ -1713,7 +1760,6 @@ class JeopardyGame {
         correctAnswer: this.currentQuestion.answer
     });
     
-    // [NUEVO] Reiniciar temporizador para el siguiente jugador
     if (this.timerEnabled) {
         setTimeout(() => {
             this.startTimer(this.currentQuestion?.type);
@@ -2224,7 +2270,7 @@ updateTimerDisplay(seconds) {
         }
     }
     
-    // [NUEVO] Mostrar en el modal del jugador
+    // [CORREGIDO] Mostrar en el modal del jugador
     let playerTimerEl = document.getElementById('player-modal-timer');
     if (!playerTimerEl) {
         const playerModalContent = document.querySelector('#player-answer-modal .modal-content');
@@ -2251,7 +2297,7 @@ updateTimerDisplay(seconds) {
         }
     }
     
-    // [NUEVO] Broadcast del tiempo para todos los jugadores
+    // [CORREGIDO] Broadcast del tiempo para TODOS los jugadores
     if (this.isHost) {
         this.broadcast({
             type: 'timer-update',
@@ -2447,7 +2493,7 @@ handleTimerJump(data) {
         ind.classList.add('jump-animation');
     }
     
-    // [NUEVO] Mostrar respuesta correcta al host si está disponible
+    // Mostrar respuesta correcta al host si está disponible
     if (this.isHost && data.correctAnswer) {
         const answerDiv = document.getElementById('modal-answer');
         answerDiv.classList.remove('hidden');
@@ -2457,9 +2503,19 @@ handleTimerJump(data) {
     
     document.getElementById('player-answer-modal').classList.remove('active');
     
-    if (this.textualMode && !this.isHost) {
+    // [CORREGIDO] Si el jugador actual es el que tiene el turno, actualizar su timer
+    if (!this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer && data.questionType) {
+            // Actualizar el timer en el modal del jugador
+            if (this.timerEnabled && this.timerSeconds > 0) {
+                const playerTimerEl = document.getElementById('player-modal-timer');
+                if (playerTimerEl) {
+                    playerTimerEl.textContent = `⏱️ ${this.timerSeconds}s`;
+                    playerTimerEl.style.display = 'block';
+                }
+            }
+            
             setTimeout(() => {
                 this.showPlayerAnswerModal({
                     category: data.category || '',
@@ -2503,6 +2559,7 @@ toggleTimerSettings(show) {
     }
 }
 
+// [NUEVO] Actualizar timer para jugadores
 // [NUEVO] Actualizar timer para jugadores
 updatePlayerTimer(seconds, isWarning) {
     const playerTimerEl = document.getElementById('player-modal-timer');
