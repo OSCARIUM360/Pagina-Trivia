@@ -750,50 +750,61 @@ class JeopardyGame {
     let valid = true;
     for (const q of this.questions) {
         if (q.type === 'anagram') {
-            if (!q.answer) {
+            // Anagrama: solo necesita la palabra (answer)
+            if (!q.answer || !q.answer.trim()) {
                 alert(`Falta la palabra para el anagrama: ${q.category} ${q.points}pts`);
                 valid = false;
                 break;
             }
+            // Para anagrama, la pregunta es automática
+            if (!q.question || !q.question.trim()) {
+                q.question = 'Ordena las letras para formar la palabra correcta';
+            }
+        } else if (q.type === 'options') {
+            // Opción múltiple: necesita pregunta Y opciones
+            if (!q.question || !q.question.trim()) {
+                alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
+                valid = false;
+                break;
+            }
+            
+            // Verificar opciones
+            if (!q.options || !Array.isArray(q.options)) {
+                alert(`Configura las opciones para: ${q.category} ${q.points}pts`);
+                valid = false;
+                break;
+            }
+            
+            const filledOptions = q.options.filter(o => o && o.trim());
+            if (filledOptions.length < 2) {
+                alert(`Opción múltiple necesita al menos 2 opciones: ${q.category} ${q.points}pts`);
+                valid = false;
+                break;
+            }
+            
+            // La respuesta correcta es la primera opción (se guarda automáticamente)
+            q.answer = filledOptions[0].trim();
+            
         } else {
-            if (!q.question) {
-                alert(`Falta pregunta: ${q.category} ${q.points}pts`);
+            // Texto normal: necesita pregunta y respuesta
+            if (!q.question || !q.question.trim()) {
+                alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
                 valid = false;
                 break;
             }
-            if (!q.answer) {
-                alert(`Falta respuesta: ${q.category} ${q.points}pts`);
+            if (!q.answer || !q.answer.trim()) {
+                alert(`Falta la respuesta: ${q.category} ${q.points}pts`);
                 valid = false;
                 break;
-            }
-            if (q.type === 'options') {
-                // La respuesta correcta debe estar en las opciones
-                if (!q.options || !Array.isArray(q.options)) {
-                    alert(`Configura las opciones para: ${q.category} ${q.points}pts`);
-                    valid = false;
-                    break;
-                }
-                const filledOptions = q.options.filter(o => o && o.trim());
-                if (filledOptions.length < 2) {
-                    alert(`Opción múltiple necesita al menos 2 opciones: ${q.category} ${q.points}pts`);
-                    valid = false;
-                    break;
-                }
-                // Verificar que la respuesta esté en las opciones
-                if (!filledOptions.some(o => o.trim().toLowerCase() === q.answer.trim().toLowerCase())) {
-                    alert(`La respuesta correcta debe estar entre las opciones: ${q.category} ${q.points}pts\nRespuesta: "${q.answer}"`);
-                    valid = false;
-                    break;
-                }
             }
         }
     }
     
-    if (valid) {
-        this.showLobby();
-        this.saveState();
+        if (valid) {
+            this.showLobby();
+            this.saveState();
+        }
     }
-}
 
     exportTrivia() {
         if (!this.isHost) return;
@@ -959,63 +970,88 @@ class JeopardyGame {
     }
 
     selectQuestion(q) {
-        if (!this.isHost || q.used || !this.gameStarted) return;
-        this.playSound('select');
-        this.currentQuestion = q; this.answerRevealed = false; this.questionJumped = false;
-        this.originalPlayer = this.currentPlayer;
-        
-        document.getElementById('modal-category').textContent = `${q.category} — ${q.points} pts`;
-        document.getElementById('modal-question').textContent = q.question;
-        document.getElementById('modal-answer').classList.add('hidden');
-        document.getElementById('player-answer-section').classList.add('hidden');
-        document.getElementById('answer-buttons').style.display = this.textualMode ? 'none' : 'flex';
-        
-        // Mostrar tipo de pregunta
-        const typeBadge = document.getElementById('modal-question-type');
-        typeBadge.classList.remove('hidden', 'anagram', 'options');
-        if (q.type === 'options') { typeBadge.textContent = '🔤 Opción múltiple'; typeBadge.classList.add('options'); }
-        else if (q.type === 'anagram') { typeBadge.textContent = '🔀 Anagrama'; typeBadge.classList.add('anagram'); }
-        else { typeBadge.classList.add('hidden'); }
-        
-        // Mostrar opciones si es opción múltiple
-        const optionsDiv = document.getElementById('modal-options');
-        const anagramDiv = document.getElementById('modal-anagram');
-        optionsDiv.classList.add('hidden'); anagramDiv.classList.add('hidden');
-        
-        if (q.type === 'options' && q.options && q.options.length > 0) {
-            optionsDiv.classList.remove('hidden');
-            // Filtrar opciones vacías y mezclar aleatoriamente
-            const validOptions = q.options.filter(opt => opt.trim());
-            const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
-            optionsDiv.innerHTML = shuffled.map((opt, i) => 
-                `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
-            ).join('');
-        }
-        
-        // Mostrar anagrama
-        if (q.type === 'anagram' && q.answer) {
-            anagramDiv.classList.remove('hidden');
-            const letters = q.answer.split('').sort(() => Math.random() - 0.5);
-            anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
-        }
-        
-        const jumpBtn = document.getElementById('btn-jump');
-        if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled || this.textualMode);
-        
-        this.updateButtonTexts();
-        this.updateTurnIndicatorModal();
-        
-        const closeBtn = document.querySelector('#question-modal .close');
-        if (closeBtn) closeBtn.style.display = 'flex';
-        
-        document.getElementById('question-modal').classList.add('active');
-        
-        // Broadcast diferente según modo
-        if (this.textualMode) {
-            this.broadcast({ type: 'question-selected', category: q.category, points: q.points, question: q.question, type: q.type, options: q.options, answer: q.type === 'anagram' ? this.shuffleString(q.answer) : '', currentPlayer: this.currentPlayer, showToAll: true });
-        } else {
-            this.broadcast({ type: 'question-selected', category: q.category, points: q.points, question: q.question, type: q.type, options: q.options, answer: q.type === 'anagram' ? this.shuffleString(q.answer) : '', currentPlayer: this.currentPlayer });
-        }
+    if (!this.isHost || q.used || !this.gameStarted) return;
+    this.playSound('select');
+    this.currentQuestion = q;
+    this.answerRevealed = false;
+    this.questionJumped = false;
+    this.originalPlayer = this.currentPlayer;
+    this.playerAnswer = null;
+    
+    document.getElementById('modal-category').textContent = `${q.category} — ${q.points} pts`;
+    document.getElementById('modal-question').textContent = q.question;
+    document.getElementById('modal-answer').classList.add('hidden');
+    document.getElementById('player-answer-section').classList.add('hidden');
+    
+    // Mostrar botones de acción para el host
+    const answerButtons = document.getElementById('answer-buttons');
+    answerButtons.style.display = 'flex';
+    document.getElementById('btn-correct').style.display = 'inline-flex';
+    document.getElementById('btn-incorrect').style.display = 'inline-flex';
+    
+    // Mostrar tipo de pregunta
+    const typeBadge = document.getElementById('modal-question-type');
+    typeBadge.classList.remove('hidden', 'anagram', 'options');
+    if (q.type === 'options') {
+        typeBadge.textContent = '🔤 Opción múltiple';
+        typeBadge.classList.add('options');
+    } else if (q.type === 'anagram') {
+        typeBadge.textContent = '🔀 Anagrama';
+        typeBadge.classList.add('anagram');
+    } else {
+        typeBadge.classList.add('hidden');
+    }
+    
+    // Mostrar opciones si es opción múltiple
+    const optionsDiv = document.getElementById('modal-options');
+    const anagramDiv = document.getElementById('modal-anagram');
+    optionsDiv.classList.add('hidden');
+    anagramDiv.classList.add('hidden');
+    
+    if (q.type === 'options' && q.options && q.options.length > 0) {
+        optionsDiv.classList.remove('hidden');
+        const validOptions = q.options.filter(opt => opt && opt.trim());
+        const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
+        optionsDiv.innerHTML = shuffled.map((opt, i) => 
+            `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
+        ).join('');
+    }
+    
+    // Mostrar anagrama
+    if (q.type === 'anagram' && q.answer) {
+        anagramDiv.classList.remove('hidden');
+        const letters = q.answer.split('').sort(() => Math.random() - 0.5);
+        anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
+    }
+    
+    const jumpBtn = document.getElementById('btn-jump');
+    if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled);
+    
+    this.updateButtonTexts();
+    this.updateTurnIndicatorModal();
+    
+    const closeBtn = document.querySelector('#question-modal .close');
+    if (closeBtn) closeBtn.style.display = 'flex';
+    
+    document.getElementById('question-modal').classList.add('active');
+    
+    // Preparar datos para broadcast
+    const broadcastData = {
+        type: 'question-selected',
+        category: q.category,
+        points: q.points,
+        question: q.question,
+        type: q.type,
+        options: q.options || [],
+        currentPlayer: this.currentPlayer
+    };
+    
+    // Para anagrama, enviar letras desordenadas
+    if (q.type === 'anagram' && q.answer) {
+        broadcastData.anagramLetters = q.answer.split('').sort(() => Math.random() - 0.5);
+    }
+    
+    this.broadcast(broadcastData);
     }
 
     shuffleString(str) {
@@ -1043,52 +1079,75 @@ class JeopardyGame {
     }
 
     showQuestionForPlayers(data) {
-        document.getElementById('modal-category').textContent = `${data.category} — ${data.points} pts`;
-        document.getElementById('modal-question').textContent = data.question;
-        document.getElementById('modal-answer').classList.add('hidden');
-        document.getElementById('player-answer-section').classList.add('hidden');
-        
-        // Tipo de pregunta
-        const typeBadge = document.getElementById('modal-question-type');
-        typeBadge.classList.remove('hidden', 'anagram', 'options');
-        if (data.type === 'options') { typeBadge.textContent = '🔤 Opción múltiple'; typeBadge.classList.add('options'); }
-        else if (data.type === 'anagram') { typeBadge.textContent = '🔀 Anagrama'; typeBadge.classList.add('anagram'); }
-        else { typeBadge.classList.add('hidden'); }
-        
-        // Opciones
-        const optionsDiv = document.getElementById('modal-options');
-        optionsDiv.classList.add('hidden');
-        if (data.type === 'options' && data.options) {
-            optionsDiv.classList.remove('hidden');
-            const validOptions = data.options.filter(opt => opt && opt.trim());
-            const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
-            optionsDiv.innerHTML = shuffled.map((opt, i) => 
-                `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
-            ).join('');
-        }
-        
-        // Anagrama
-        const anagramDiv = document.getElementById('modal-anagram');
-        anagramDiv.classList.add('hidden');
-        if (data.type === 'anagram' && data.answer) {
-            anagramDiv.classList.remove('hidden');
-            const letters = data.answer.split('');
-            anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
-        }
-        
-        document.getElementById('answer-buttons').style.display = 'none';
-        const jumpBtn = document.getElementById('btn-jump'); if (jumpBtn) jumpBtn.classList.add('hidden');
-        const closeBtn = document.querySelector('#question-modal .close'); if (closeBtn) closeBtn.style.display = 'none';
-        document.getElementById('question-modal').classList.add('active');
-        
-        // En modo textual, mostrar input de respuesta al jugador del turno
-        if (this.textualMode && !this.isHost) {
-            const myIndex = this.players.findIndex(p => p.name === this.playerName);
-            if (myIndex === this.currentPlayer) {
-                this.showPlayerAnswerModal(data);
-            }
+    document.getElementById('modal-category').textContent = `${data.category} — ${data.points} pts`;
+    document.getElementById('modal-question').textContent = data.question;
+    document.getElementById('modal-answer').classList.add('hidden');
+    document.getElementById('player-answer-section').classList.add('hidden');
+    
+    // Tipo de pregunta
+    const typeBadge = document.getElementById('modal-question-type');
+    typeBadge.classList.remove('hidden', 'anagram', 'options');
+    if (data.type === 'options') {
+        typeBadge.textContent = '🔤 Opción múltiple';
+        typeBadge.classList.add('options');
+    } else if (data.type === 'anagram') {
+        typeBadge.textContent = '🔀 Anagrama';
+        typeBadge.classList.add('anagram');
+    } else {
+        typeBadge.classList.add('hidden');
+    }
+    
+    // Opciones
+    const optionsDiv = document.getElementById('modal-options');
+    const anagramDiv = document.getElementById('modal-anagram');
+    optionsDiv.classList.add('hidden');
+    anagramDiv.classList.add('hidden');
+    
+    if (data.type === 'options' && data.options) {
+        optionsDiv.classList.remove('hidden');
+        const validOptions = data.options.filter(opt => opt && opt.trim());
+        const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
+        optionsDiv.innerHTML = shuffled.map((opt, i) => 
+            `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
+        ).join('');
+    }
+    
+    // Anagrama
+    if (data.type === 'anagram' && data.anagramLetters) {
+        anagramDiv.classList.remove('hidden');
+        anagramDiv.innerHTML = data.anagramLetters.map(l => 
+            `<div class="anagram-letter">${l}</div>`
+        ).join('');
+    }
+    
+    // Ocultar botones de acción (los jugadores no califican)
+    document.getElementById('answer-buttons').style.display = 'none';
+    const jumpBtn = document.getElementById('btn-jump');
+    if (jumpBtn) jumpBtn.classList.add('hidden');
+    
+    // Ocultar X para jugadores
+    const closeBtn = document.querySelector('#question-modal .close');
+    if (closeBtn) closeBtn.style.display = 'none';
+    
+    document.getElementById('question-modal').classList.add('active');
+    
+    // En modo textual, mostrar input de respuesta al jugador del turno
+    if (this.textualMode && !this.isHost) {
+        const myIndex = this.players.findIndex(p => p.name === this.playerName);
+        if (myIndex === this.currentPlayer) {
+            // Preparar datos para el modal de respuesta
+            const playerData = {
+                category: data.category,
+                points: data.points,
+                question: data.question,
+                type: data.type,
+                options: data.options,
+                anagramLetters: data.anagramLetters
+            };
+            this.showPlayerAnswerModal(playerData);
         }
     }
+}
 
     handleQuestionAssigned(data) {
         // El host notifica qué pregunta fue seleccionada por el jugador
@@ -1101,37 +1160,39 @@ class JeopardyGame {
     }
 
     showPlayerAnswerModal(data) {
-        document.getElementById('player-modal-category').textContent = `${data.category} — ${data.points} pts`;
-        document.getElementById('player-modal-question').textContent = data.question;
-        document.getElementById('player-answer-input').value = '';
-        document.getElementById('player-answer-input').disabled = false;
-        document.getElementById('btn-send-answer').disabled = false;
-        document.getElementById('player-answer-status').classList.add('hidden');
-        
-        // Opciones en modal de respuesta
-        const optDiv = document.getElementById('player-modal-options');
-        optDiv.classList.add('hidden');
-        if (data.type === 'options' && data.options) {
-            optDiv.classList.remove('hidden');
-            const validOptions = data.options.filter(opt => opt && opt.trim());
-            const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
-            optDiv.innerHTML = shuffled.map((opt, i) => 
-                `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
-            ).join('');
-        }
-        
-        // Anagrama en modal de respuesta
-        const anagramDiv = document.getElementById('player-modal-anagram');
-        anagramDiv.classList.add('hidden');
-        if (data.type === 'anagram' && data.answer) {
-            anagramDiv.classList.remove('hidden');
-            const letters = data.answer.split('');
-            anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
-        }
-        
-        document.getElementById('player-answer-modal').classList.add('active');
-        document.getElementById('player-answer-input').focus();
+    document.getElementById('player-modal-category').textContent = `${data.category} — ${data.points} pts`;
+    document.getElementById('player-modal-question').textContent = data.question;
+    document.getElementById('player-answer-input').value = '';
+    document.getElementById('player-answer-input').disabled = false;
+    document.getElementById('btn-send-answer').disabled = false;
+    document.getElementById('player-answer-status').classList.add('hidden');
+    
+    // Opciones en modal de respuesta
+    const optDiv = document.getElementById('player-modal-options');
+    const anagramDiv = document.getElementById('player-modal-anagram');
+    optDiv.classList.add('hidden');
+    anagramDiv.classList.add('hidden');
+    
+    if (data.type === 'options' && data.options) {
+        optDiv.classList.remove('hidden');
+        const validOptions = data.options.filter(opt => opt && opt.trim());
+        const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
+        optDiv.innerHTML = shuffled.map((opt, i) => 
+            `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
+        ).join('');
     }
+    
+    // Anagrama en modal de respuesta
+    if (data.type === 'anagram' && data.anagramLetters) {
+        anagramDiv.classList.remove('hidden');
+        anagramDiv.innerHTML = data.anagramLetters.map(l => 
+            `<div class="anagram-letter">${l}</div>`
+        ).join('');
+    }
+    
+    document.getElementById('player-answer-modal').classList.add('active');
+    document.getElementById('player-answer-input').focus();
+}
 
     closeModal() {
         if (!this.isHost) return;
