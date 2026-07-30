@@ -21,7 +21,7 @@
         <!-- Home -->
         <div id="home-screen" class="screen active">
             <div class="logo-container">
-                <div class="logo">🎯</div>
+                <div class="logo">🏆</div>
                 <h1>Jeopardy Trivia</h1>
                 <p class="subtitle">El juego de preguntas definitivo</p>
             </div>
@@ -46,7 +46,28 @@
                 </div>
                 <div class="input-group">
                     <label>Tu nombre</label>
-                    <input type="text" id="join-player-name" placeholder="Nombre del jugador" autocomplete="off">
+                    <div class="name-emoji-row">
+                        <input type="text" id="join-player-name" placeholder="Nombre del jugador" autocomplete="off">
+                        <div id="emoji-picker-trigger" class="emoji-trigger" title="Elegir emoji"></div>
+                    </div>
+                </div>
+                <div id="emoji-picker" class="hidden emoji-picker">
+                    <p class="hint">Elige un emoji (opcional)</p>
+                    <div class="emoji-categories">
+                        <div class="emoji-category">
+                            <p class="emoji-cat-label">🐾 Animales</p>
+                            <div class="emoji-grid" id="emoji-animals"></div>
+                        </div>
+                        <div class="emoji-category">
+                            <p class="emoji-cat-label">🍕 Comida</p>
+                            <div class="emoji-grid" id="emoji-food"></div>
+                        </div>
+                        <div class="emoji-category">
+                            <p class="emoji-cat-label">🌿 Naturaleza</p>
+                            <div class="emoji-grid" id="emoji-nature"></div>
+                        </div>
+                    </div>
+                    <button id="emoji-clear" class="btn btn-text btn-sm">Sin emoji</button>
                 </div>
                 <div class="form-actions">
                     <button id="join-room-submit" class="btn btn-primary">Entrar</button>
@@ -87,9 +108,7 @@
                 </div>
             </div>
             <div class="actions">
-                <button id="back-to-home" class="btn btn-text">
-                    <i class="fas fa-arrow-left"></i> Volver
-                </button>
+                <button id="back-to-home" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
                 <button id="create-board" class="btn btn-primary">Siguiente</button>
             </div>
         </div>
@@ -99,9 +118,7 @@
             <h2><i class="fas fa-tags"></i> Nombra tus Categorías</h2>
             <div id="category-inputs"></div>
             <div class="actions">
-                <button id="back-to-setup" class="btn btn-text">
-                    <i class="fas fa-arrow-left"></i> Volver
-                </button>
+                <button id="back-to-setup" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
                 <button id="submit-categories" class="btn btn-primary">Siguiente</button>
             </div>
         </div>
@@ -112,12 +129,8 @@
             <p class="hint">Escribe las preguntas y respuestas para cada categoría</p>
             <div id="questions-container"></div>
             <div class="actions">
-                <button id="back-to-categories" class="btn btn-text">
-                    <i class="fas fa-arrow-left"></i> Volver
-                </button>
-                <button id="export-trivia" class="btn btn-secondary">
-                    <i class="fas fa-copy"></i> Copiar Código de Trivia
-                </button>
+                <button id="back-to-categories" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
+                <button id="export-trivia" class="btn btn-secondary"><i class="fas fa-copy"></i> Copiar Código de Trivia</button>
                 <button id="submit-questions" class="btn btn-primary">Finalizar</button>
             </div>
         </div>
@@ -138,90 +151,99 @@
                     <p id="lobby-status" class="hint"></p>
                 </div>
             </div>
-            <!-- Opciones de juego (solo host) -->
             <div id="game-options" class="card hidden">
                 <h3><i class="fas fa-sliders-h"></i> Opciones de Juego</h3>
                 <div class="options-grid">
                     <div class="option-item">
-                        <label class="switch">
-                            <input type="checkbox" id="option-jump">
-                            <span class="slider"></span>
-                        </label>
+                        <label class="switch"><input type="checkbox" id="option-jump"><span class="slider"></span></label>
                         <span>Salto de pregunta</span>
                     </div>
                     <div class="option-item">
-                        <label class="switch">
-                            <input type="checkbox" id="option-hard">
-                            <span class="slider"></span>
-                        </label>
+                        <label class="switch"><input type="checkbox" id="option-hard"><span class="slider"></span></label>
                         <span>Modo difícil</span>
+                    </div>
+                    <div class="option-item">
+                        <label class="switch"><input type="checkbox" id="option-textual"><span class="slider"></span></label>
+                        <span>Modo textual</span>
                     </div>
                 </div>
             </div>
             <div class="actions" id="lobby-host-actions">
-                <button id="back-to-questions" class="btn btn-text">
-                    <i class="fas fa-arrow-left"></i> Volver
-                </button>
-                <button id="start-game-lobby" class="btn btn-primary btn-lg">
-                    <i class="fas fa-play"></i> Iniciar Juego
-                </button>
+                <button id="back-to-questions" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
+                <button id="start-game-lobby" class="btn btn-primary btn-lg"><i class="fas fa-play"></i> Iniciar Juego</button>
             </div>
             <div class="actions" id="lobby-player-actions" style="display:none;">
-                <button id="leave-lobby" class="btn btn-danger">
-                    <i class="fas fa-sign-out-alt"></i> Salir de la sala
-                </button>
+                <button id="leave-lobby" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Salir de la sala</button>
             </div>
         </div>
 
         <!-- Game -->
         <div id="game-screen" class="screen">
             <div class="game-header">
-                <h1>🎯 Jeopardy</h1>
+                <h1>🏆 Jeopardy</h1>
                 <div id="host-controls">
-                    <button id="end-game" class="btn btn-danger">
-                        <i class="fas fa-flag-checkered"></i> Finalizar
-                    </button>
+                    <button id="end-game" class="btn btn-danger"><i class="fas fa-flag-checkered"></i> Finalizar</button>
                 </div>
             </div>
             <div id="game-board"></div>
             <div id="players-bar"></div>
             <p id="turn-indicator" class="hint"></p>
+            
+            <!-- Panel de ajuste manual de puntos -->
+            <div id="manual-points-panel" class="card hidden">
+                <h3><i class="fas fa-calculator"></i> Ajuste Manual de Puntos</h3>
+                <div class="manual-row">
+                    <select id="manual-player-select"><option value="">Seleccionar jugador...</option></select>
+                    <input type="number" id="manual-points-input" placeholder="Puntos" value="100" min="1">
+                    <button id="btn-manual-add" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Sumar</button>
+                    <button id="btn-manual-sub" class="btn btn-danger btn-sm"><i class="fas fa-minus"></i> Restar</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Modal de pregunta -->
+        <!-- Modal de pregunta (host) -->
         <div id="question-modal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <div class="modal-category-badge" id="modal-category"></div>
+                <div id="modal-question-type" class="question-type-badge"></div>
                 <div id="modal-question" class="question-display"></div>
+                <div id="modal-options" class="options-display hidden"></div>
+                <div id="modal-anagram" class="anagram-display hidden"></div>
                 <div id="modal-turn-indicator" class="turn-indicator-modal"></div>
                 <div id="answer-buttons" class="modal-actions">
-                    <button id="btn-correct" class="btn btn-success btn-lg">
-                        <i class="fas fa-check-circle"></i> <span id="btn-correct-text">Correcto</span>
-                    </button>
-                    <button id="btn-incorrect" class="btn btn-danger btn-lg">
-                        <i class="fas fa-times-circle"></i> <span id="btn-incorrect-text">Incorrecto</span>
-                    </button>
-                    <button id="btn-jump" class="btn btn-warning btn-lg hidden">
-                        <i class="fas fa-forward"></i> Pasar al siguiente
-                    </button>
+                    <button id="btn-correct" class="btn btn-success btn-lg"><i class="fas fa-check-circle"></i> <span id="btn-correct-text">Correcto</span></button>
+                    <button id="btn-incorrect" class="btn btn-danger btn-lg"><i class="fas fa-times-circle"></i> <span id="btn-incorrect-text">Incorrecto</span></button>
+                    <button id="btn-jump" class="btn btn-warning btn-lg hidden"><i class="fas fa-forward"></i> Pasar al siguiente</button>
                 </div>
                 <div id="modal-answer" class="hidden answer-reveal">
                     <p class="answer-label">Respuesta correcta:</p>
                     <p id="correct-answer-text"></p>
                 </div>
-                <!-- Ajuste manual de puntos -->
-                <div id="manual-points" class="hidden manual-points-section">
-                    <p class="hint">Ajuste manual de puntos para <strong id="manual-player-name"></strong></p>
-                    <div class="manual-points-actions">
-                        <button id="btn-add-100" class="btn btn-sm btn-success">+100</button>
-                        <button id="btn-add-200" class="btn btn-sm btn-success">+200</button>
-                        <button id="btn-add-500" class="btn btn-sm btn-success">+500</button>
-                        <button id="btn-sub-100" class="btn btn-sm btn-danger">-100</button>
-                        <button id="btn-sub-200" class="btn btn-sm btn-danger">-200</button>
-                        <button id="btn-sub-500" class="btn btn-sm btn-danger">-500</button>
-                    </div>
+                <!-- Respuesta del jugador (modo textual) -->
+                <div id="player-answer-section" class="hidden">
+                    <p class="answer-label">Respuesta del jugador:</p>
+                    <p id="player-answer-text"></p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Modal de respuesta para jugadores (modo textual) -->
+        <div id="player-answer-modal" class="modal">
+            <div class="modal-content">
+                <h3>📝 Tu Respuesta</h3>
+                <div class="modal-category-badge" id="player-modal-category"></div>
+                <p id="player-modal-question" class="question-display"></p>
+                <div id="player-modal-options" class="options-display hidden"></div>
+                <div id="player-modal-anagram" class="anagram-display hidden"></div>
+                <div class="input-group">
+                    <label>Escribe tu respuesta:</label>
+                    <input type="text" id="player-answer-input" placeholder="Tu respuesta..." autocomplete="off">
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-send-answer" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane"></i> Enviar Respuesta</button>
+                </div>
+                <p id="player-answer-status" class="hint hidden"></p>
             </div>
         </div>
 
@@ -230,13 +252,9 @@
             <h2><i class="fas fa-trophy"></i> ¡Juego Terminado!</h2>
             <div class="confetti-container" id="confetti"></div>
             <div id="podium"></div>
-            <button id="show-full-results" class="btn btn-secondary">
-                <i class="fas fa-list"></i> Ver Clasificación Completa
-            </button>
+            <button id="show-full-results" class="btn btn-secondary"><i class="fas fa-list"></i> Ver Clasificación Completa</button>
             <div id="full-results" class="hidden card"></div>
-            <button id="new-game" class="btn btn-primary">
-                <i class="fas fa-redo"></i> Nuevo Juego
-            </button>
+            <button id="new-game" class="btn btn-primary"><i class="fas fa-redo"></i> Nuevo Juego</button>
         </div>
     </div>
 
