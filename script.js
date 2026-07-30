@@ -34,6 +34,7 @@ class JeopardyGame {
         this.availableEmojis = this.getEmojiList();
 
         this.setupMusic();
+        this.musicStarted = false;
         this.bindEvents();
         this.setupEmojiPicker();
         
@@ -107,17 +108,49 @@ class JeopardyGame {
     }
 
     startGameMusic() {
-        if (this.bgMusic) { this.bgMusic.pause(); this.bgMusic.currentTime = 0; }
-        if (this.gameMusic) this.gameMusic.play().catch(() => {});
-        this.musicPlaying = true;
-        this.updateMusicButton();
+    console.log('Iniciando música del juego...');
+    if (this.bgMusic) {
+        this.bgMusic.pause();
+        this.bgMusic.currentTime = 0;
     }
+    if (this.gameMusic) {
+        this.gameMusic.currentTime = 0;
+        this.gameMusic.volume = 0.2;
+        
+        // Intentar reproducir
+        const playPromise = this.gameMusic.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                console.log('Música del juego iniciada');
+                this.musicPlaying = true;
+                this.updateMusicButton();
+            }).catch((err) => {
+                console.log('Reproducción bloqueada, esperando interacción:', err);
+                // Esperar a la primera interacción del usuario
+                const playOnInteraction = () => {
+                    this.gameMusic.play().then(() => {
+                        this.musicPlaying = true;
+                        this.updateMusicButton();
+                    }).catch(() => {});
+                    document.removeEventListener('click', playOnInteraction);
+                    document.removeEventListener('touchstart', playOnInteraction);
+                };
+                document.addEventListener('click', playOnInteraction, { once: true });
+                document.addEventListener('touchstart', playOnInteraction, { once: true });
+            });
+        }
+    }
+}
 
     stopGameMusic() {
-        if (this.gameMusic) { this.gameMusic.pause(); this.gameMusic.currentTime = 0; }
-        this.musicPlaying = false;
-        this.updateMusicButton();
+    console.log('Deteniendo música del juego...');
+    if (this.gameMusic) {
+        this.gameMusic.pause();
+        this.gameMusic.currentTime = 0;
     }
+    this.musicPlaying = false;
+    this.updateMusicButton();
+}
 
     updateMusicButton() {
         const btn = document.getElementById('toggle-music');
@@ -249,6 +282,15 @@ class JeopardyGame {
         }
         
         window.addEventListener('beforeunload', () => { if (this.isHost && this.roomCode) this.saveState(); });
+
+        document.addEventListener('click', () => {
+            if (this.gameStarted && !this.musicPlaying && this.gameMusic) {
+                this.gameMusic.play().then(() => {
+                    this.musicPlaying = true;
+                    this.updateMusicButton();
+                }).catch(() => {});
+            }
+        }, { once: false });
     }
 
     onClick(id, handler) { const el = document.getElementById(id); if (el) el.addEventListener('click', handler); }
@@ -367,48 +409,127 @@ class JeopardyGame {
     }
 
     handleData(conn, data) {
-        if (!this.isHost) {
-            switch (data.type) {
-                case 'welcome':
-                    this.players = data.players || [];
-                    this.jumpEnabled = data.jumpEnabled || false; this.hardMode = data.hardMode || false; this.textualMode = data.textualMode || false;
-                    this.updateLobby();
-                    if (data.gameStarted) { this.loadGameState(data); this.renderBoard(); this.showScreen('game-screen'); this.startGameMusic(); }
-                    else this.showLobby();
-                    const btn = document.getElementById('join-room-submit'); if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-                    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
-                    this.playSound('join'); break;
-                case 'players-update': this.players = data.players; this.updateLobby(); break;
-                case 'game-start': this.loadGameState(data); this.renderBoard(); this.showScreen('game-screen'); this.startGameMusic(); break;
-                case 'game-update': this.applyGameUpdate(data); break;
-                case 'question-selected': this.showQuestionForPlayers(data); break;
-                case 'question-assigned': this.handleQuestionAssigned(data); break;
-                case 'answer-result': this.showAnswerForPlayers(data); break;
-                case 'jump-notification': this.showJumpNotification(data); break;
-                case 'close-modal': document.getElementById('question-modal').classList.remove('active'); document.getElementById('player-answer-modal').classList.remove('active'); break;
-                case 'game-end': this.players = data.players; this.gameStarted = false; document.getElementById('question-modal').classList.remove('active'); document.getElementById('player-answer-modal').classList.remove('active'); this.stopGameMusic(); this.showResults(); this.playSound('win'); break;
-                case 'kicked': this.disconnect(); break;
-                case 'player-turn': this.handlePlayerTurn(data); break;
+    if (!this.isHost) {
+        // SOY JUGADOR
+        switch (data.type) {
+            case 'welcome':
+                this.players = data.players || [];
+                this.jumpEnabled = data.jumpEnabled || false;
+                this.hardMode = data.hardMode || false;
+                this.textualMode = data.textualMode || false;
+                this.updateLobby();
+                if (data.gameStarted) {
+                    this.loadGameState(data);
+                    this.renderBoard();
+                    this.showScreen('game-screen');
+                    this.startGameMusic();
+                } else {
+                    this.showLobby();
+                }
+                const btn = document.getElementById('join-room-submit');
+                if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+                if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
+                this.playSound('join');
+                break;
+                
+            case 'players-update':
+                this.players = data.players;
+                this.updateLobby();
+                break;
+                
+            case 'game-start':
+                this.loadGameState(data);
+                this.renderBoard();
+                this.showScreen('game-screen');
+                this.startGameMusic();
+                break;
+                
+            case 'game-update':
+                this.applyGameUpdate(data);
+                break;
+                
+            case 'question-selected':
+                // Cerrar modal de respuesta anterior
+                document.getElementById('player-answer-modal').classList.remove('active');
+                this.showQuestionForPlayers(data);
+                break;
+                
+            case 'answer-result':
+                // Cerrar modal de respuesta
+                document.getElementById('player-answer-modal').classList.remove('active');
+                this.showAnswerForPlayers(data);
+                break;
+                
+            case 'jump-notification':
+                this.showJumpNotification(data);
+                break;
+                
+            case 'close-modal':
+                document.getElementById('question-modal').classList.remove('active');
+                document.getElementById('player-answer-modal').classList.remove('active');
+                break;
+                
+            case 'player-turn':
+                // Cerrar modal anterior
+                document.getElementById('player-answer-modal').classList.remove('active');
+                
+                if (this.textualMode && !this.isHost) {
+                    const myIndex = this.players.findIndex(p => p.name === this.playerName);
+                    if (myIndex === this.currentPlayer && data.questionType) {
+                        setTimeout(() => {
+                            this.showPlayerAnswerModal({
+                                category: data.category || '',
+                                points: data.points || 0,
+                                question: data.question || '',
+                                type: data.questionType,
+                                options: data.questionOptions,
+                                anagramLetters: data.questionAnagram,
+                                correctAnswer: data.correctAnswer
+                            });
+                        }, 300);
+                    }
+                }
+                break;
+                
+            case 'game-end':
+                this.players = data.players;
+                this.gameStarted = false;
+                document.getElementById('question-modal').classList.remove('active');
+                document.getElementById('player-answer-modal').classList.remove('active');
+                this.stopGameMusic();
+                this.showResults();
+                this.playSound('win');
+                break;
+                
+            case 'kicked':
+                this.disconnect();
+                break;
+        }
+    } else {
+        // SOY HOST
+        if (data.type === 'join-request') {
+            this.handleJoinRequest(conn, data);
+        } else if (data.type === 'leave-request') {
+            this.handleLeaveRequest(conn, data);
+        } else if (data.type === 'player-select-question') {
+            this.handlePlayerSelectQuestion(conn, data);
+        } else if (data.type === 'player-answer') {
+            this.playerAnswer = data.answer;
+            document.getElementById('player-answer-section').classList.remove('hidden');
+            document.getElementById('player-answer-text').textContent = '"' + data.answer + '"';
+            
+            // En opción múltiple, verificar automáticamente
+            if (data.isCorrect !== undefined) {
+                // Auto-aplicar resultado
+                document.getElementById('answer-buttons').style.display = 'flex';
+                this.handleAnswer(data.isCorrect);
+            } else {
+                // Mostrar botones para que el host decida
+                document.getElementById('answer-buttons').style.display = 'flex';
             }
-        } else {
-    // SOY HOST
-    if (data.type === 'join-request') {
-        this.handleJoinRequest(conn, data);
-    } else if (data.type === 'leave-request') {
-        this.handleLeaveRequest(conn, data);
-    } else if (data.type === 'player-select-question') {
-        this.handlePlayerSelectQuestion(conn, data);
-    } else if (data.type === 'player-answer') {
-        this.playerAnswer = data.answer;
-        document.getElementById('player-answer-section').classList.remove('hidden');
-        document.getElementById('player-answer-text').textContent = '"' + data.answer + '"';
-        document.getElementById('answer-buttons').style.display = 'flex';
-        if (data.isCorrect !== undefined) {
-            this.handleAnswer(data.isCorrect);
         }
     }
 }
-    }
 
     handleJoinRequest(conn, data) {
         const name = data.name?.trim(); const emoji = data.emoji || '';
@@ -1201,6 +1322,8 @@ class JeopardyGame {
     }
     
     document.getElementById('answer-buttons').style.display = 'none';
+    document.getElementById('btn-correct').style.display = 'none';
+    document.getElementById('btn-incorrect').style.display = 'none';
     document.getElementById('btn-jump').classList.add('hidden');
     
     const closeBtn = document.querySelector('#question-modal .close');
@@ -1208,18 +1331,25 @@ class JeopardyGame {
     
     document.getElementById('question-modal').classList.add('active');
     
+    // Cerrar modal de respuesta anterior siempre
+    document.getElementById('player-answer-modal').classList.remove('active');
+    
+    // Modo textual: solo el jugador del turno puede responder
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
-            this.showPlayerAnswerModal({
-                category: data.category,
-                points: data.points,
-                question: data.question,
-                type: questionType,
-                options: data.options,
-                anagramLetters: data.anagramLetters,
-                correctAnswer: data.correctAnswer
-            });
+            // Pequeño delay para asegurar que el modal anterior se cerró
+            setTimeout(() => {
+                this.showPlayerAnswerModal({
+                    category: data.category,
+                    points: data.points,
+                    question: data.question,
+                    type: questionType,
+                    options: data.options,
+                    anagramLetters: data.anagramLetters,
+                    correctAnswer: data.correctAnswer
+                });
+            }, 200);
         }
     }
 }
@@ -1293,63 +1423,162 @@ class JeopardyGame {
     }
 
     jumpQuestion() {
-        if (!this.isHost || !this.jumpEnabled || !this.currentQuestion || this.answerRevealed) return;
-        this.playSound('jump');
-        if (this.hardMode && !this.questionJumped) {
-            const penalty = Math.floor(this.currentQuestion.points / 2);
-            this.players[this.currentPlayer].score -= penalty;
-            if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
-        }
-        let nextPlayer = this.currentPlayer;
-        do { nextPlayer = (nextPlayer + 1) % this.players.length; } while (this.players[nextPlayer]?.isHost && this.players.length > 1);
-        this.currentPlayer = nextPlayer; this.questionJumped = true;
-        this.updateTurnIndicatorModal(); this.updateButtonTexts(); this.renderBoard(); this.updateManualPointsPanel();
-        this.broadcast({ type: 'jump-notification', playerName: this.players[this.currentPlayer].name, playerEmoji: this.players[this.currentPlayer].emoji, currentPlayer: this.currentPlayer, players: this.players });
-        if (this.textualMode) this.broadcast({ type: 'player-turn', currentPlayer: this.currentPlayer, playerName: this.players[this.currentPlayer].name });
+    if (!this.isHost || !this.jumpEnabled || !this.currentQuestion || this.answerRevealed) return;
+    this.playSound('jump');
+    
+    if (this.hardMode && !this.questionJumped) {
+        const penalty = Math.floor(this.currentQuestion.points / 2);
+        this.players[this.currentPlayer].score -= penalty;
+        if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
     }
+    
+    let nextPlayer = this.currentPlayer;
+    do {
+        nextPlayer = (nextPlayer + 1) % this.players.length;
+    } while (this.players[nextPlayer]?.isHost && this.players.length > 1);
+    
+    this.currentPlayer = nextPlayer;
+    this.questionJumped = true;
+    
+    this.updateTurnIndicatorModal();
+    this.updateButtonTexts();
+    this.renderBoard();
+    this.updateManualPointsPanel();
+    
+    // Broadcast del salto
+    this.broadcast({
+        type: 'jump-notification',
+        playerName: this.players[this.currentPlayer].name,
+        playerEmoji: this.players[this.currentPlayer].emoji,
+        currentPlayer: this.currentPlayer,
+        players: this.players,
+        questionType: this.currentQuestion.type,
+        questionOptions: this.currentShuffledOptions,
+        questionAnagram: this.currentShuffledLetters,
+        correctAnswer: this.currentQuestion.answer
+    });
+    
+    // En modo textual, notificar al nuevo jugador
+    if (this.textualMode) {
+        this.broadcast({
+            type: 'player-turn',
+            currentPlayer: this.currentPlayer,
+            playerName: this.players[this.currentPlayer].name,
+            questionType: this.currentQuestion.type,
+            questionOptions: this.currentShuffledOptions,
+            questionAnagram: this.currentShuffledLetters,
+            correctAnswer: this.currentQuestion.answer,
+            question: this.currentQuestion.question,
+            category: this.currentQuestion.category,
+            points: this.currentQuestion.points
+        });
+    }
+}
 
     showJumpNotification(data) {
-        if (data.players) this.players = data.players;
-        if (data.currentPlayer !== undefined) this.currentPlayer = data.currentPlayer;
-        this.renderBoard();
-        const ind = document.getElementById('modal-turn-indicator');
-        if (ind) { ind.textContent = `⏭ Saltó a: ${data.playerEmoji ? data.playerEmoji + ' ' : ''}${data.playerName}`; ind.classList.remove('jump-animation'); void ind.offsetWidth; ind.classList.add('jump-animation'); }
+    if (data.players) this.players = data.players;
+    if (data.currentPlayer !== undefined) this.currentPlayer = data.currentPlayer;
+    this.renderBoard();
+    
+    const ind = document.getElementById('modal-turn-indicator');
+    if (ind) {
+        ind.textContent = `⏭ Saltó a: ${data.playerEmoji ? data.playerEmoji + ' ' : ''}${data.playerName}`;
+        ind.classList.remove('jump-animation');
+        void ind.offsetWidth;
+        ind.classList.add('jump-animation');
     }
+    
+    // Cerrar modal de respuesta del jugador anterior
+    document.getElementById('player-answer-modal').classList.remove('active');
+    
+    // Si es modo textual y soy el nuevo jugador, mostrar modal de respuesta
+    if (this.textualMode && !this.isHost) {
+        const myIndex = this.players.findIndex(p => p.name === this.playerName);
+        if (myIndex === this.currentPlayer && data.questionType) {
+            // Reabrir modal de respuesta para el nuevo jugador
+            setTimeout(() => {
+                this.showPlayerAnswerModal({
+                    category: data.category || this.currentQuestion?.category || '',
+                    points: data.points || this.currentQuestion?.points || 0,
+                    question: data.question || this.currentQuestion?.question || '',
+                    type: data.questionType,
+                    options: data.questionOptions,
+                    anagramLetters: data.questionAnagram,
+                    correctAnswer: data.correctAnswer
+                });
+            }, 500);
+        }
+    }
+}
 
     handleAnswer(correct) {
-        if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
-        this.answerRevealed = true;
-        this.playSound(correct ? 'correct' : 'incorrect');
-        
-        if (correct) this.players[this.currentPlayer].score += this.currentQuestion.points;
-        else if (this.hardMode) {
-            const penalty = Math.floor(this.currentQuestion.points / 2);
-            this.players[this.currentPlayer].score -= penalty;
-            if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
-        }
-        
-        const answerDiv = document.getElementById('modal-answer');
-        answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
-        answerDiv.classList.add(correct ? 'correct-anim' : 'incorrect-anim');
-        document.getElementById('correct-answer-text').textContent = this.currentQuestion.answer;
-        document.getElementById('answer-buttons').style.display = 'none';
-        
-        const closeBtn = document.querySelector('#question-modal .close');
-        if (closeBtn) closeBtn.style.display = 'flex';
-        
-        this.currentQuestion.used = true;
-        
-        this.broadcast({ type: 'answer-result', correct, answer: this.currentQuestion.answer, playerName: this.players[this.currentPlayer].name, playerEmoji: this.players[this.currentPlayer].emoji, pointsAwarded: correct ? this.currentQuestion.points : 0, players: this.players, playerAnswer: this.playerAnswer || null });
-        this.playerAnswer = null;
-        
-        do { this.currentPlayer = (this.currentPlayer + 1) % this.players.length; } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
-        
-        this.broadcast({ type: 'game-update', questionId: this.currentQuestion.id, players: this.players, currentPlayer: this.currentPlayer });
-        if (this.textualMode) this.broadcast({ type: 'player-turn', currentPlayer: this.currentPlayer, playerName: this.players[this.currentPlayer].name });
-        
-        this.renderBoard(); this.updateManualPointsPanel(); this.saveState();
-        if (this.questions.every(q => q.used)) setTimeout(() => this.endGame(), 1500);
+    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
+    this.answerRevealed = true;
+    this.playSound(correct ? 'correct' : 'incorrect');
+    
+    if (correct) {
+        this.players[this.currentPlayer].score += this.currentQuestion.points;
+    } else if (this.hardMode) {
+        const penalty = Math.floor(this.currentQuestion.points / 2);
+        this.players[this.currentPlayer].score -= penalty;
+        if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
     }
+    
+    const answerDiv = document.getElementById('modal-answer');
+    answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
+    answerDiv.classList.add(correct ? 'correct-anim' : 'incorrect-anim');
+    document.getElementById('correct-answer-text').textContent = this.currentQuestion.answer;
+    document.getElementById('answer-buttons').style.display = 'none';
+    
+    const closeBtn = document.querySelector('#question-modal .close');
+    if (closeBtn) closeBtn.style.display = 'flex';
+    
+    this.currentQuestion.used = true;
+    
+    // Broadcast del resultado
+    this.broadcast({
+        type: 'answer-result',
+        correct,
+        answer: this.currentQuestion.answer,
+        playerName: this.players[this.currentPlayer].name,
+        playerEmoji: this.players[this.currentPlayer].emoji,
+        pointsAwarded: correct ? this.currentQuestion.points : (this.hardMode ? -Math.floor(this.currentQuestion.points / 2) : 0),
+        players: this.players,
+        playerAnswer: this.playerAnswer || null
+    });
+    
+    this.playerAnswer = null;
+    
+    do {
+        this.currentPlayer = (this.currentPlayer + 1) % this.players.length;
+    } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
+    
+    this.broadcast({
+        type: 'game-update',
+        questionId: this.currentQuestion.id,
+        players: this.players,
+        currentPlayer: this.currentPlayer
+    });
+    
+    // Cerrar modal de respuesta del jugador
+    document.getElementById('player-answer-modal').classList.remove('active');
+    
+    if (this.textualMode) {
+        this.broadcast({
+            type: 'player-turn',
+            currentPlayer: this.currentPlayer,
+            playerName: this.players[this.currentPlayer].name
+        });
+    }
+    
+    this.renderBoard();
+    this.updateManualPointsPanel();
+    this.saveState();
+    
+    if (this.questions.every(q => q.used)) {
+        setTimeout(() => this.endGame(), 1500);
+    }
+}
 
     showAnswerForPlayers(data) {
     const answerDiv = document.getElementById('modal-answer');
