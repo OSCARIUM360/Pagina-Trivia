@@ -723,70 +723,96 @@ class JeopardyGame {
         if (q) q.type = select.value;
     });
     
-    // Guardar preguntas y respuestas
+    // Guardar preguntas
     document.querySelectorAll('.q-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.question = input.value.trim();
     });
     
+    // Guardar respuestas
     document.querySelectorAll('.a-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.answer = input.value.trim();
     });
     
-    // Guardar opciones
+    // Guardar opciones y establecer respuesta para opción múltiple
+    document.querySelectorAll('.options-container').forEach(container => {
+        const qId = parseInt(container.dataset.id);
+        const q = this.questions.find(q => q.id === qId);
+        if (!q) return;
+        
+        // Recoger opciones de los inputs
+        const optInputs = container.querySelectorAll('.opt-input');
+        if (optInputs.length > 0 && q.type === 'options') {
+            q.options = [];
+            optInputs.forEach(input => {
+                const val = input.value.trim();
+                if (val) q.options.push(val);
+            });
+            // La respuesta correcta es la primera opción
+            if (q.options.length > 0) {
+                q.answer = q.options[0];
+            }
+        }
+    });
+    
+    // También guardar opciones sueltas por si acaso
     document.querySelectorAll('.opt-input').forEach(input => {
         const qId = parseInt(input.dataset.qid);
         const oIdx = parseInt(input.dataset.oidx);
         const q = this.questions.find(q => q.id === qId);
-        if (q && q.options) {
+        if (q && q.options && q.type === 'options') {
             q.options[oIdx] = input.value.trim();
+            // Asegurar que answer sea la primera opción
+            if (oIdx === 0 && input.value.trim()) {
+                q.answer = input.value.trim();
+            }
         }
     });
     
     // Validar
     let valid = true;
     for (const q of this.questions) {
+        console.log('Validando pregunta:', q.id, 'tipo:', q.type, 'pregunta:', q.question, 'respuesta:', q.answer, 'opciones:', q.options);
+        
         if (q.type === 'anagram') {
-            // Anagrama: solo necesita la palabra (answer)
             if (!q.answer || !q.answer.trim()) {
                 alert(`Falta la palabra para el anagrama: ${q.category} ${q.points}pts`);
                 valid = false;
                 break;
             }
-            // Para anagrama, la pregunta es automática
             if (!q.question || !q.question.trim()) {
                 q.question = 'Ordena las letras para formar la palabra correcta';
             }
         } else if (q.type === 'options') {
-            // Opción múltiple: necesita pregunta Y opciones
             if (!q.question || !q.question.trim()) {
                 alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
                 valid = false;
                 break;
             }
             
-            // Verificar opciones
+            // Asegurar que options existe
             if (!q.options || !Array.isArray(q.options)) {
-                alert(`Configura las opciones para: ${q.category} ${q.points}pts`);
+                q.options = [];
+            }
+            
+            // Filtrar opciones vacías
+            q.options = q.options.filter(o => o && o.trim());
+            
+            if (q.options.length < 2) {
+                alert(`Opción múltiple necesita al menos 2 opciones: ${q.category} ${q.points}pts\nOpciones encontradas: ${q.options.length}`);
                 valid = false;
                 break;
             }
             
-            const filledOptions = q.options.filter(o => o && o.trim());
-            if (filledOptions.length < 2) {
-                alert(`Opción múltiple necesita al menos 2 opciones: ${q.category} ${q.points}pts`);
-                valid = false;
-                break;
-            }
-            
-            // La respuesta correcta es la primera opción (se guarda automáticamente)
-            q.answer = filledOptions[0].trim();
+            // La respuesta correcta es la primera opción
+            q.answer = q.options[0].trim();
+            console.log('Opción múltiple - respuesta establecida:', q.answer);
             
         } else {
-            // Texto normal: necesita pregunta y respuesta
+            // Texto normal
             if (!q.question || !q.question.trim()) {
                 alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
                 valid = false;
@@ -800,11 +826,12 @@ class JeopardyGame {
         }
     }
     
-        if (valid) {
-            this.showLobby();
-            this.saveState();
-        }
+    if (valid) {
+        console.log('Validación exitosa, preguntas:', this.questions);
+        this.showLobby();
+        this.saveState();
     }
+}
 
     exportTrivia() {
         if (!this.isHost) return;
@@ -971,6 +998,8 @@ class JeopardyGame {
 
     selectQuestion(q) {
     if (!this.isHost || q.used || !this.gameStarted) return;
+    console.log('Host seleccionó pregunta:', q.id, q.type, q.category, q.points);
+    
     this.playSound('select');
     this.currentQuestion = q;
     this.answerRevealed = false;
@@ -978,18 +1007,20 @@ class JeopardyGame {
     this.originalPlayer = this.currentPlayer;
     this.playerAnswer = null;
     
+    // Limpiar modal
     document.getElementById('modal-category').textContent = `${q.category} — ${q.points} pts`;
-    document.getElementById('modal-question').textContent = q.question;
+    document.getElementById('modal-question').textContent = q.question || 'Ordena las letras para formar la palabra correcta';
     document.getElementById('modal-answer').classList.add('hidden');
     document.getElementById('player-answer-section').classList.add('hidden');
+    document.getElementById('modal-options').classList.add('hidden');
+    document.getElementById('modal-anagram').classList.add('hidden');
     
-    // Mostrar botones de acción para el host
-    const answerButtons = document.getElementById('answer-buttons');
-    answerButtons.style.display = 'flex';
+    // Mostrar botones de acción
+    document.getElementById('answer-buttons').style.display = 'flex';
     document.getElementById('btn-correct').style.display = 'inline-flex';
     document.getElementById('btn-incorrect').style.display = 'inline-flex';
     
-    // Mostrar tipo de pregunta
+    // Tipo de pregunta
     const typeBadge = document.getElementById('modal-question-type');
     typeBadge.classList.remove('hidden', 'anagram', 'options');
     if (q.type === 'options') {
@@ -1002,13 +1033,9 @@ class JeopardyGame {
         typeBadge.classList.add('hidden');
     }
     
-    // Mostrar opciones si es opción múltiple
-    const optionsDiv = document.getElementById('modal-options');
-    const anagramDiv = document.getElementById('modal-anagram');
-    optionsDiv.classList.add('hidden');
-    anagramDiv.classList.add('hidden');
-    
+    // Opciones
     if (q.type === 'options' && q.options && q.options.length > 0) {
+        const optionsDiv = document.getElementById('modal-options');
         optionsDiv.classList.remove('hidden');
         const validOptions = q.options.filter(opt => opt && opt.trim());
         const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
@@ -1017,31 +1044,34 @@ class JeopardyGame {
         ).join('');
     }
     
-    // Mostrar anagrama
+    // Anagrama
     if (q.type === 'anagram' && q.answer) {
+        const anagramDiv = document.getElementById('modal-anagram');
         anagramDiv.classList.remove('hidden');
         const letters = q.answer.split('').sort(() => Math.random() - 0.5);
         anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
     }
     
+    // Botón saltar
     const jumpBtn = document.getElementById('btn-jump');
     if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled);
     
     this.updateButtonTexts();
     this.updateTurnIndicatorModal();
     
+    // Mostrar X
     const closeBtn = document.querySelector('#question-modal .close');
     if (closeBtn) closeBtn.style.display = 'flex';
     
     document.getElementById('question-modal').classList.add('active');
     
-    // Preparar datos para broadcast
+    // Broadcast a jugadores
     const broadcastData = {
         type: 'question-selected',
         category: q.category,
         points: q.points,
-        question: q.question,
-        type: q.type,
+        question: q.question || 'Ordena las letras para formar la palabra correcta',
+        qType: q.type || 'text',
         options: q.options || [],
         currentPlayer: this.currentPlayer
     };
@@ -1051,8 +1081,9 @@ class JeopardyGame {
         broadcastData.anagramLetters = q.answer.split('').sort(() => Math.random() - 0.5);
     }
     
+    console.log('Broadcast a jugadores:', broadcastData);
     this.broadcast(broadcastData);
-    }
+}
 
     shuffleString(str) {
         const arr = str.split('');
@@ -1079,18 +1110,25 @@ class JeopardyGame {
     }
 
     showQuestionForPlayers(data) {
+    console.log('Jugador recibió pregunta:', data);
+    
+    // Limpiar modal
     document.getElementById('modal-category').textContent = `${data.category} — ${data.points} pts`;
-    document.getElementById('modal-question').textContent = data.question;
+    document.getElementById('modal-question').textContent = data.question || 'Ordena las letras para formar la palabra correcta';
     document.getElementById('modal-answer').classList.add('hidden');
     document.getElementById('player-answer-section').classList.add('hidden');
+    document.getElementById('modal-options').classList.add('hidden');
+    document.getElementById('modal-anagram').classList.add('hidden');
     
-    // Tipo de pregunta
+    // Tipo de pregunta (usar qType del broadcast)
+    const questionType = data.qType || data.type || 'text';
+    
     const typeBadge = document.getElementById('modal-question-type');
     typeBadge.classList.remove('hidden', 'anagram', 'options');
-    if (data.type === 'options') {
+    if (questionType === 'options') {
         typeBadge.textContent = '🔤 Opción múltiple';
         typeBadge.classList.add('options');
-    } else if (data.type === 'anagram') {
+    } else if (questionType === 'anagram') {
         typeBadge.textContent = '🔀 Anagrama';
         typeBadge.classList.add('anagram');
     } else {
@@ -1098,12 +1136,8 @@ class JeopardyGame {
     }
     
     // Opciones
-    const optionsDiv = document.getElementById('modal-options');
-    const anagramDiv = document.getElementById('modal-anagram');
-    optionsDiv.classList.add('hidden');
-    anagramDiv.classList.add('hidden');
-    
-    if (data.type === 'options' && data.options) {
+    if (questionType === 'options' && data.options && data.options.length > 0) {
+        const optionsDiv = document.getElementById('modal-options');
         optionsDiv.classList.remove('hidden');
         const validOptions = data.options.filter(opt => opt && opt.trim());
         const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
@@ -1113,38 +1147,39 @@ class JeopardyGame {
     }
     
     // Anagrama
-    if (data.type === 'anagram' && data.anagramLetters) {
+    if (questionType === 'anagram' && data.anagramLetters && data.anagramLetters.length > 0) {
+        const anagramDiv = document.getElementById('modal-anagram');
         anagramDiv.classList.remove('hidden');
         anagramDiv.innerHTML = data.anagramLetters.map(l => 
             `<div class="anagram-letter">${l}</div>`
         ).join('');
     }
     
-    // Ocultar botones de acción (los jugadores no califican)
+    // Ocultar botones de acción
     document.getElementById('answer-buttons').style.display = 'none';
+    document.getElementById('btn-correct').style.display = 'none';
+    document.getElementById('btn-incorrect').style.display = 'none';
     const jumpBtn = document.getElementById('btn-jump');
     if (jumpBtn) jumpBtn.classList.add('hidden');
     
-    // Ocultar X para jugadores
+    // Ocultar X
     const closeBtn = document.querySelector('#question-modal .close');
     if (closeBtn) closeBtn.style.display = 'none';
     
     document.getElementById('question-modal').classList.add('active');
     
-    // En modo textual, mostrar input de respuesta al jugador del turno
+    // Modo textual: mostrar input al jugador del turno
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
-            // Preparar datos para el modal de respuesta
-            const playerData = {
+            this.showPlayerAnswerModal({
                 category: data.category,
                 points: data.points,
                 question: data.question,
-                type: data.type,
+                type: questionType,
                 options: data.options,
                 anagramLetters: data.anagramLetters
-            };
-            this.showPlayerAnswerModal(playerData);
+            });
         }
     }
 }
