@@ -28,8 +28,6 @@ class JeopardyGame {
     this.jumpEnabled = false;
     this.hardMode = false;
     this.textualMode = false;
-    
-    // [NUEVO] Variables de temporizador
     this.timerEnabled = false;
     this.timerSeconds = 0;
     this.timerInterval = null;
@@ -37,11 +35,15 @@ class JeopardyGame {
     this.timerTimeout = false;
     this.jumpCount = 0;
     this.playersJumped = new Set();
-    
     this.questionJumped = false;
     this.originalPlayer = 0;
     this.playerAnswer = null;
     this.availableEmojis = this.getEmojiList();
+    
+    // [NUEVO] Tiempos configurables
+    this.timerTextSeconds = 25;
+    this.timerOptionsSeconds = 15;
+    this.timerAnagramSeconds = 20;
 
     this.setupMusic();
     this.musicStarted = false;
@@ -58,57 +60,61 @@ class JeopardyGame {
 }
 
     getEmojiList() {
-        return {
-            animals: ['🐶','🐺','🦁','🐭','🐰','🐼','🐻','🦉','🐧','🦄','🐸','🐒','🦑','🪼','🐦‍🔥','🦩','🐦‍⬛','🦀','🦈','🐳'],
-            food: ['🍕','🍔','🥚','🍿','🌮','🥩','🥠','🧀','🥗','🍩','🍰','🍭','🍫','🍼','🍾','🍵','🍺','🥞','🍷','🧋'],
-            nature: ['🍒','🥭','🍓','🍋','🥝','🥥','🍇','🍉','🍍','🍌','🌷','🌹','🪻','🌳','🍃','🌵','🌻','🍁','🌲','🍀']
-        };
-    }
+    return {
+        animals: ['🐶','🐺','🦁','🐭','🐰','🐼','🐻','🦉','🐧','🦄','🐸','🐒','🦑','🪼','🐦‍🔥','🦩','🐦‍⬛','🦀','🦈','🐳','🦋'],
+        food: ['🍕','🍔','🥚','🍿','🌮','🥩','🥠','🧀','🥗','🍩','🍰','🍭','🍫','🍼','🍾','🍵','🍺','🥞','🍷','🧋','🥨'],
+        nature: ['🍒','🥭','🍓','🍋','🥝','🥥','🍇','🍉','🍍','🍌','🌷','🌹','🪻','🌳','🍃','🌵','🌻','🍁','🌲','🍀','🪺'],
+        objects: ['👓','🎨','🛒','🩴','🥾','💍','💎','⚽','🏀','👠','⚾','🎱','🤿','🥊','🎲','🕹️','🎮','♟️','♠️','🎈','🧨'],
+        others: ['✈️','💵','🌍','🪐','🏯','🗼','⛺','💈','🎫','🧻','🚿','🧯','🌕','☀️','🔥','💧','❤️','🎁','💝','❄️','🌈']
+    };
+}
 
     getAllEmojis() {
-        const lists = this.availableEmojis;
-        return [...lists.animals, ...lists.food, ...lists.nature];
-    }
+    const lists = this.availableEmojis;
+    return [...lists.animals, ...lists.food, ...lists.nature, ...lists.objects, ...lists.others];
+}
 
     setupEmojiPicker() {
-        const trigger = document.getElementById('emoji-picker-trigger');
-        const picker = document.getElementById('emoji-picker');
-        const clearBtn = document.getElementById('emoji-clear');
-        if (!trigger || !picker) return;
-        
-        const allEmojis = this.getAllEmojis();
-        this.playerEmoji = allEmojis[Math.floor(Math.random() * allEmojis.length)];
-        trigger.textContent = this.playerEmoji;
-        
-        // Llenar grids por categoría
-        const grids = {
-            animals: document.getElementById('emoji-animals'),
-            food: document.getElementById('emoji-food'),
-            nature: document.getElementById('emoji-nature')
-        };
-        
-        Object.entries(this.availableEmojis).forEach(([category, emojis]) => {
-            const grid = grids[category];
-            if (!grid) return;
-            emojis.forEach(emoji => {
-                const item = document.createElement('div');
-                item.className = 'emoji-item';
-                item.textContent = emoji;
-                if (emoji === this.playerEmoji) item.classList.add('selected');
-                item.addEventListener('click', () => {
-                    this.playerEmoji = emoji;
-                    trigger.textContent = emoji;
-                    document.querySelectorAll('.emoji-item').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    this.playSound('click');
-                });
-                grid.appendChild(item);
+    const trigger = document.getElementById('emoji-picker-trigger');
+    const picker = document.getElementById('emoji-picker');
+    const clearBtn = document.getElementById('emoji-clear');
+    if (!trigger || !picker) return;
+    
+    const allEmojis = this.getAllEmojis();
+    this.playerEmoji = allEmojis[Math.floor(Math.random() * allEmojis.length)];
+    trigger.textContent = this.playerEmoji;
+    
+    // Llenar grids por categoría
+    const grids = {
+        animals: document.getElementById('emoji-animals'),
+        food: document.getElementById('emoji-food'),
+        nature: document.getElementById('emoji-nature'),
+        objects: document.getElementById('emoji-objects'),
+        others: document.getElementById('emoji-others')
+    };
+    
+    Object.entries(this.availableEmojis).forEach(([category, emojis]) => {
+        const grid = grids[category];
+        if (!grid) return;
+        emojis.forEach(emoji => {
+            const item = document.createElement('div');
+            item.className = 'emoji-item';
+            item.textContent = emoji;
+            if (emoji === this.playerEmoji) item.classList.add('selected');
+            item.addEventListener('click', () => {
+                this.playerEmoji = emoji;
+                trigger.textContent = emoji;
+                document.querySelectorAll('.emoji-item').forEach(el => el.classList.remove('selected'));
+                item.classList.add('selected');
+                this.playSound('click');
             });
+            grid.appendChild(item);
         });
-        
-        trigger.addEventListener('click', () => { picker.classList.toggle('hidden'); this.playSound('click'); });
-        clearBtn.addEventListener('click', () => { this.playerEmoji = ''; trigger.textContent = '😊'; document.querySelectorAll('.emoji-item').forEach(el => el.classList.remove('selected')); this.playSound('click'); });
-    }
+    });
+    
+    trigger.addEventListener('click', () => { picker.classList.toggle('hidden'); this.playSound('click'); });
+    clearBtn.addEventListener('click', () => { this.playerEmoji = ''; trigger.textContent = '😊'; document.querySelectorAll('.emoji-item').forEach(el => el.classList.remove('selected')); this.playSound('click'); });
+}
 
     setupMusic() {
         this.bgMusic = document.getElementById('bg-music');
@@ -196,35 +202,53 @@ class JeopardyGame {
     }
 
     saveState() {
-        const state = {
-            categories: this.categories, questions: this.questions, players: this.players,
-            currentPlayer: this.currentPlayer, totalCategories: this.totalCategories,
-            questionsPerCategory: this.questionsPerCategory, gameStarted: this.gameStarted,
-            isHost: this.isHost, roomCode: this.roomCode, currentScreen: this.getCurrentScreen(),
-            jumpEnabled: this.jumpEnabled, hardMode: this.hardMode, textualMode: this.textualMode
-        };
-        localStorage.setItem('jeopardy-state', JSON.stringify(state));
-    }
+    const state = {
+        categories: this.categories, 
+        questions: this.questions, 
+        players: this.players,
+        currentPlayer: this.currentPlayer, 
+        totalCategories: this.totalCategories,
+        questionsPerCategory: this.questionsPerCategory, 
+        gameStarted: this.gameStarted,
+        isHost: this.isHost, 
+        roomCode: this.roomCode, 
+        currentScreen: this.getCurrentScreen(),
+        jumpEnabled: this.jumpEnabled, 
+        hardMode: this.hardMode, 
+        textualMode: this.textualMode,
+        timerEnabled: this.timerEnabled, // [NUEVO]
+        timerTextSeconds: this.timerTextSeconds, // [NUEVO]
+        timerOptionsSeconds: this.timerOptionsSeconds, // [NUEVO]
+        timerAnagramSeconds: this.timerAnagramSeconds // [NUEVO]
+    };
+    localStorage.setItem('jeopardy-state', JSON.stringify(state));
+}
 
     restoreState() {
-        const saved = localStorage.getItem('jeopardy-state');
-        if (!saved) return false;
-        try {
-            const state = JSON.parse(saved);
-            if (!state.isHost || !state.roomCode) return false;
-            Object.assign(this, state);
-            this.joinedNames = new Set(this.players.map(p => p.name));
-            this.initPeer(this.roomCode + '-host');
-            if (state.currentScreen) {
-                this.showScreen(state.currentScreen);
-                if (state.currentScreen === 'lobby-screen') { this.updateLobby(); this.updateOptionsUI(); }
-                else if (state.currentScreen === 'game-screen') { this.renderBoard(); this.startGameMusic(); }
-                else if (state.currentScreen === 'categories-screen') this.showCategoriesScreen();
-                else if (state.currentScreen === 'questions-screen') this.showQuestionsScreen();
-            }
-            return true;
-        } catch (e) { return false; }
-    }
+    const saved = localStorage.getItem('jeopardy-state');
+    if (!saved) return false;
+    try {
+        const state = JSON.parse(saved);
+        if (!state.isHost || !state.roomCode) return false;
+        Object.assign(this, state);
+        
+        // [NUEVO] Restaurar tiempos si existen
+        if (state.timerTextSeconds) this.timerTextSeconds = state.timerTextSeconds;
+        if (state.timerOptionsSeconds) this.timerOptionsSeconds = state.timerOptionsSeconds;
+        if (state.timerAnagramSeconds) this.timerAnagramSeconds = state.timerAnagramSeconds;
+        
+        this.joinedNames = new Set(this.players.map(p => p.name));
+        this.initPeer(this.roomCode + '-host');
+        if (state.currentScreen) {
+            this.showScreen(state.currentScreen);
+            if (state.currentScreen === 'lobby-screen') { this.updateLobby(); this.updateOptionsUI(); }
+            else if (state.currentScreen === 'game-screen') { this.renderBoard(); this.startGameMusic(); }
+            else if (state.currentScreen === 'categories-screen') this.showCategoriesScreen();
+            else if (state.currentScreen === 'questions-screen') this.showQuestionsScreen();
+        }
+        return true;
+    } catch (e) { return false; }
+}
 
     clearState() { localStorage.removeItem('jeopardy-state'); }
     getCurrentScreen() { const a = document.querySelector('.screen.active'); return a ? a.id : 'home-screen'; }
@@ -274,18 +298,69 @@ class JeopardyGame {
     const jumpCheck = document.getElementById('option-jump');
     const hardCheck = document.getElementById('option-hard');
     const textualCheck = document.getElementById('option-textual');
-    const timerCheck = document.getElementById('option-timer'); // [NUEVO]
+    const timerCheck = document.getElementById('option-timer');
     
     if (jumpCheck) jumpCheck.addEventListener('change', () => { this.jumpEnabled = jumpCheck.checked; this.saveState(); this.playSound('toggle'); });
     if (hardCheck) hardCheck.addEventListener('change', () => { this.hardMode = hardCheck.checked; this.saveState(); this.playSound('toggle'); });
     if (textualCheck) textualCheck.addEventListener('change', () => { this.textualMode = textualCheck.checked; this.saveState(); this.playSound('toggle'); });
-    if (timerCheck) timerCheck.addEventListener('change', () => { this.timerEnabled = timerCheck.checked; this.saveState(); this.playSound('toggle'); }); // [NUEVO]
+    
+    if (timerCheck) {
+        timerCheck.addEventListener('change', () => {
+            this.timerEnabled = timerCheck.checked;
+            this.toggleTimerSettings(this.timerEnabled);
+            this.saveState();
+            this.playSound('toggle');
+        });
+    }
+    
+    // Eventos para los inputs de tiempo
+    const timerText = document.getElementById('timer-text');
+    const timerOptions = document.getElementById('timer-options');
+    const timerAnagram = document.getElementById('timer-anagram');
+    
+    if (timerText) timerText.addEventListener('change', () => {
+        const val = parseInt(timerText.value);
+        if (val >= 5 && val <= 60) this.timerTextSeconds = val;
+        else timerText.value = this.timerTextSeconds;
+        this.saveState();
+    });
+    
+    if (timerOptions) timerOptions.addEventListener('change', () => {
+        const val = parseInt(timerOptions.value);
+        if (val >= 5 && val <= 60) this.timerOptionsSeconds = val;
+        else timerOptions.value = this.timerOptionsSeconds;
+        this.saveState();
+    });
+    
+    if (timerAnagram) timerAnagram.addEventListener('change', () => {
+        const val = parseInt(timerAnagram.value);
+        if (val >= 5 && val <= 60) this.timerAnagramSeconds = val;
+        else timerAnagram.value = this.timerAnagramSeconds;
+        this.saveState();
+    });
     
     const roomInput = document.getElementById('room-code');
     const nameInput = document.getElementById('join-player-name');
+    
     if (roomInput && nameInput) {
         roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') nameInput.focus(); });
         nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.joinRoom(); });
+    }
+    
+    // Contador de caracteres para el nombre
+    if (nameInput) {
+        nameInput.addEventListener('input', () => {
+            const hint = document.getElementById('name-length-hint');
+            if (hint) {
+                const length = nameInput.value.length;
+                hint.textContent = `${length}/12`;
+                if (length > 10) {
+                    hint.classList.add('warning');
+                } else {
+                    hint.classList.remove('warning');
+                }
+            }
+        });
     }
     
     const answerInput = document.getElementById('player-answer-input');
@@ -333,12 +408,23 @@ class JeopardyGame {
     const jumpCheck = document.getElementById('option-jump');
     const hardCheck = document.getElementById('option-hard');
     const textualCheck = document.getElementById('option-textual');
-    const timerCheck = document.getElementById('option-timer'); // [NUEVO]
+    const timerCheck = document.getElementById('option-timer');
     
     if (jumpCheck) jumpCheck.checked = this.jumpEnabled;
     if (hardCheck) hardCheck.checked = this.hardMode;
     if (textualCheck) textualCheck.checked = this.textualMode;
-    if (timerCheck) timerCheck.checked = this.timerEnabled; // [NUEVO]
+    if (timerCheck) {
+        timerCheck.checked = this.timerEnabled;
+        this.toggleTimerSettings(this.timerEnabled);
+    }
+    
+    // [NUEVO] Actualizar valores de tiempo
+    const timerText = document.getElementById('timer-text');
+    const timerOptions = document.getElementById('timer-options');
+    const timerAnagram = document.getElementById('timer-anagram');
+    if (timerText) timerText.value = this.timerTextSeconds;
+    if (timerOptions) timerOptions.value = this.timerOptionsSeconds;
+    if (timerAnagram) timerAnagram.value = this.timerAnagramSeconds;
 }
 
     updateManualPointsPanel() {
@@ -381,18 +467,34 @@ class JeopardyGame {
     }
 
     joinRoom() {
-        const code = document.getElementById('room-code').value.trim().toUpperCase();
-        const name = document.getElementById('join-player-name').value.trim();
-        if (!name) return alert('Ingresa tu nombre');
-        if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
-        const btn = document.getElementById('join-room-submit');
-        btn.disabled = true; btn.textContent = 'Conectando...';
-        this.roomCode = code; this.isHost = false; this.playerName = name;
-        sessionStorage.setItem('jeopardy-player-code', code);
-        sessionStorage.setItem('jeopardy-player-name', name);
-        sessionStorage.setItem('jeopardy-player-emoji', this.playerEmoji);
-        this.initPeer(code + '-player-' + Date.now());
+    const code = document.getElementById('room-code').value.trim().toUpperCase();
+    const nameInput = document.getElementById('join-player-name');
+    let name = nameInput.value.trim();
+    
+    // [NUEVO] Validar nombre: máximo 12 caracteres y sin emojis
+    if (!name) return alert('Ingresa tu nombre');
+    
+    // Eliminar emojis del nombre (caracteres Unicode en rangos de emojis)
+    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F1E0}-\u{1F1FF}]/gu;
+    const hasEmoji = emojiRegex.test(name);
+    if (hasEmoji) {
+        return alert('❌ El nombre no puede contener emojis. Usa solo letras y números.');
     }
+    
+    if (name.length > 12) {
+        return alert('❌ El nombre no puede tener más de 12 caracteres.');
+    }
+    
+    if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
+    
+    const btn = document.getElementById('join-room-submit');
+    btn.disabled = true; btn.textContent = 'Conectando...';
+    this.roomCode = code; this.isHost = false; this.playerName = name;
+    sessionStorage.setItem('jeopardy-player-code', code);
+    sessionStorage.setItem('jeopardy-player-name', name);
+    sessionStorage.setItem('jeopardy-player-emoji', this.playerEmoji);
+    this.initPeer(code + '-player-' + Date.now());
+}
 
     initPeer(id) {
         if (this.peer) { this.peer.destroy(); this.peer = null; }
@@ -548,15 +650,43 @@ class JeopardyGame {
 }
 
     handleJoinRequest(conn, data) {
-        const name = data.name?.trim(); const emoji = data.emoji || '';
-        if (!name) return;
-        if (this.joinedNames.has(name)) { conn.send({ type: 'error', message: 'Nombre ya en uso' }); return; }
-        if (this.gameStarted) { conn.send({ type: 'error', message: 'Juego en curso' }); return; }
-        this.players.push({ name, score: 0, id: conn.peer, isHost: false, emoji });
-        this.joinedNames.add(name); conn.metadata = { name, emoji };
-        conn.send({ type: 'join-accepted', players: this.players });
-        this.broadcastPlayers(); this.updateLobby(); this.saveState(); this.playSound('join');
+    const name = data.name?.trim();
+    const emoji = data.emoji || '';
+    
+    // [NUEVO] Validación adicional en el servidor (host)
+    if (!name) return;
+    
+    // Verificar emojis en el nombre
+    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F1E0}-\u{1F1FF}]/gu;
+    if (emojiRegex.test(name)) {
+        conn.send({ type: 'error', message: 'El nombre no puede contener emojis' });
+        return;
     }
+    
+    if (name.length > 12) {
+        conn.send({ type: 'error', message: 'El nombre no puede tener más de 12 caracteres' });
+        return;
+    }
+    
+    if (this.joinedNames.has(name)) {
+        conn.send({ type: 'error', message: 'Nombre ya en uso' });
+        return;
+    }
+    
+    if (this.gameStarted) {
+        conn.send({ type: 'error', message: 'Juego en curso' });
+        return;
+    }
+    
+    this.players.push({ name, score: 0, id: conn.peer, isHost: false, emoji });
+    this.joinedNames.add(name);
+    conn.metadata = { name, emoji };
+    conn.send({ type: 'join-accepted', players: this.players });
+    this.broadcastPlayers();
+    this.updateLobby();
+    this.saveState();
+    this.playSound('join');
+}
 
     handleLeaveRequest(conn, data) {
         const name = conn.metadata?.name;
@@ -674,7 +804,12 @@ class JeopardyGame {
     this.jumpEnabled = data.jumpEnabled || false;
     this.hardMode = data.hardMode || false;
     this.textualMode = data.textualMode || false;
-    this.timerEnabled = data.timerEnabled || false; // [NUEVO]
+    this.timerEnabled = data.timerEnabled || false;
+    
+    // [NUEVO] Cargar tiempos
+    this.timerTextSeconds = data.timerTextSeconds || 25;
+    this.timerOptionsSeconds = data.timerOptionsSeconds || 15;
+    this.timerAnagramSeconds = data.timerAnagramSeconds || 20;
 }
 
     applyGameUpdate(data) {
@@ -1103,7 +1238,10 @@ class JeopardyGame {
         jumpEnabled: this.jumpEnabled, 
         hardMode: this.hardMode, 
         textualMode: this.textualMode,
-        timerEnabled: this.timerEnabled // [NUEVO]
+        timerEnabled: this.timerEnabled,
+        timerTextSeconds: this.timerTextSeconds, // [NUEVO]
+        timerOptionsSeconds: this.timerOptionsSeconds, // [NUEVO]
+        timerAnagramSeconds: this.timerAnagramSeconds // [NUEVO]
     });
     
     this.renderBoard(); 
@@ -1954,10 +2092,10 @@ startTimer(questionType) {
     
     this.stopTimer();
     
-    let seconds = 25;
-    if (questionType === 'options') seconds = 15;
-    else if (questionType === 'anagram') seconds = 20;
-    else seconds = 25;
+    let seconds = this.timerTextSeconds; // default
+    if (questionType === 'options') seconds = this.timerOptionsSeconds;
+    else if (questionType === 'anagram') seconds = this.timerAnagramSeconds;
+    else seconds = this.timerTextSeconds;
     
     this.timerSeconds = seconds;
     this.timerRunning = true;
@@ -2262,5 +2400,17 @@ handleTimerTimeoutAll(data) {
     }
     
     document.getElementById('player-answer-modal').classList.remove('active');
+}
+
+// [NUEVO] Mostrar/ocultar configuración de tiempos
+toggleTimerSettings(show) {
+    const settings = document.getElementById('timer-settings');
+    if (settings) {
+        if (show) {
+            settings.classList.remove('hidden');
+        } else {
+            settings.classList.add('hidden');
+        }
+    }
 }
 }
