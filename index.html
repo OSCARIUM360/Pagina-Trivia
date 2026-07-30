@@ -13,12 +13,15 @@
     <audio id="bg-music" loop>
         <source src="https://cdn.pixabay.com/audio/2022/03/10/audio_a3f9d8c84e.mp3" type="audio/mpeg">
     </audio>
+    <audio id="game-music" loop>
+        <source src="https://cdn.pixabay.com/audio/2022/05/17/audio_5a8e0d1c91.mp3" type="audio/mpeg">
+    </audio>
     
     <div class="container">
         <!-- Home -->
         <div id="home-screen" class="screen active">
             <div class="logo-container">
-                <div class="logo">🏆</div>
+                <div class="logo">🎯</div>
                 <h1>Jeopardy Trivia</h1>
                 <p class="subtitle">El juego de preguntas definitivo</p>
             </div>
@@ -105,19 +108,19 @@
 
         <!-- Questions (host) -->
         <div id="questions-screen" class="screen">
-    <h2><i class="fas fa-question-circle"></i> Preguntas y Respuestas</h2>
-    <p class="hint">Escribe las preguntas y respuestas para cada categoría</p>
-    <div id="questions-container"></div>
-    <div class="actions">
-        <button id="back-to-categories" class="btn btn-text">
-            <i class="fas fa-arrow-left"></i> Volver
-        </button>
-        <button id="export-trivia" class="btn btn-secondary">
-            <i class="fas fa-copy"></i> Copiar Código de Trivia
-        </button>
-        <button id="submit-questions" class="btn btn-primary">Finalizar</button>
-    </div>
-</div>
+            <h2><i class="fas fa-question-circle"></i> Preguntas y Respuestas</h2>
+            <p class="hint">Escribe las preguntas y respuestas para cada categoría</p>
+            <div id="questions-container"></div>
+            <div class="actions">
+                <button id="back-to-categories" class="btn btn-text">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </button>
+                <button id="export-trivia" class="btn btn-secondary">
+                    <i class="fas fa-copy"></i> Copiar Código de Trivia
+                </button>
+                <button id="submit-questions" class="btn btn-primary">Finalizar</button>
+            </div>
+        </div>
 
         <!-- Lobby -->
         <div id="lobby-screen" class="screen">
@@ -135,6 +138,26 @@
                     <p id="lobby-status" class="hint"></p>
                 </div>
             </div>
+            <!-- Opciones de juego (solo host) -->
+            <div id="game-options" class="card hidden">
+                <h3><i class="fas fa-sliders-h"></i> Opciones de Juego</h3>
+                <div class="options-grid">
+                    <div class="option-item">
+                        <label class="switch">
+                            <input type="checkbox" id="option-jump">
+                            <span class="slider"></span>
+                        </label>
+                        <span>Salto de pregunta</span>
+                    </div>
+                    <div class="option-item">
+                        <label class="switch">
+                            <input type="checkbox" id="option-hard">
+                            <span class="slider"></span>
+                        </label>
+                        <span>Modo difícil</span>
+                    </div>
+                </div>
+            </div>
             <div class="actions" id="lobby-host-actions">
                 <button id="back-to-questions" class="btn btn-text">
                     <i class="fas fa-arrow-left"></i> Volver
@@ -143,12 +166,17 @@
                     <i class="fas fa-play"></i> Iniciar Juego
                 </button>
             </div>
+            <div class="actions" id="lobby-player-actions" style="display:none;">
+                <button id="leave-lobby" class="btn btn-danger">
+                    <i class="fas fa-sign-out-alt"></i> Salir de la sala
+                </button>
+            </div>
         </div>
 
         <!-- Game -->
         <div id="game-screen" class="screen">
             <div class="game-header">
-                <h1>🏆 Jeopardy</h1>
+                <h1>🎯 Jeopardy</h1>
                 <div id="host-controls">
                     <button id="end-game" class="btn btn-danger">
                         <i class="fas fa-flag-checkered"></i> Finalizar
@@ -166,17 +194,33 @@
                 <span class="close">&times;</span>
                 <div class="modal-category-badge" id="modal-category"></div>
                 <div id="modal-question" class="question-display"></div>
+                <div id="modal-turn-indicator" class="turn-indicator-modal"></div>
                 <div id="answer-buttons" class="modal-actions">
                     <button id="btn-correct" class="btn btn-success btn-lg">
-                        <i class="fas fa-check-circle"></i> Correcto
+                        <i class="fas fa-check-circle"></i> <span id="btn-correct-text">Correcto</span>
                     </button>
                     <button id="btn-incorrect" class="btn btn-danger btn-lg">
-                        <i class="fas fa-times-circle"></i> Incorrecto
+                        <i class="fas fa-times-circle"></i> <span id="btn-incorrect-text">Incorrecto</span>
+                    </button>
+                    <button id="btn-jump" class="btn btn-warning btn-lg hidden">
+                        <i class="fas fa-forward"></i> Pasar al siguiente
                     </button>
                 </div>
                 <div id="modal-answer" class="hidden answer-reveal">
                     <p class="answer-label">Respuesta correcta:</p>
                     <p id="correct-answer-text"></p>
+                </div>
+                <!-- Ajuste manual de puntos -->
+                <div id="manual-points" class="hidden manual-points-section">
+                    <p class="hint">Ajuste manual de puntos para <strong id="manual-player-name"></strong></p>
+                    <div class="manual-points-actions">
+                        <button id="btn-add-100" class="btn btn-sm btn-success">+100</button>
+                        <button id="btn-add-200" class="btn btn-sm btn-success">+200</button>
+                        <button id="btn-add-500" class="btn btn-sm btn-success">+500</button>
+                        <button id="btn-sub-100" class="btn btn-sm btn-danger">-100</button>
+                        <button id="btn-sub-200" class="btn btn-sm btn-danger">-200</button>
+                        <button id="btn-sub-500" class="btn btn-sm btn-danger">-500</button>
+                    </div>
                 </div>
             </div>
         </div>
