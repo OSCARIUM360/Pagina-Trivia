@@ -545,3 +545,21 @@ input:checked + .slider:before { transform: translateX(22px); }
     font-size: 0.8rem;
     margin-top: 4px;
 }
+/* Timer Display */
+.timer-display {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    display: inline-block;
+    min-width: 80px;
+    transition: all 0.3s;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
