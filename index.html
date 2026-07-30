@@ -45,30 +45,39 @@
                     <input type="text" id="room-code" placeholder="Ej: ABC123" maxlength="6" autocomplete="off">
                 </div>
                 <div class="input-group">
-                    <label>Tu nombre</label>
+                    <label>Tu nombre (máx. 12 caracteres, sin emojis)</label>
                     <div class="name-emoji-row">
-                        <input type="text" id="join-player-name" placeholder="Nombre del jugador" autocomplete="off">
+                        <input type="text" id="join-player-name" placeholder="Nombre del jugador" maxlength="12" autocomplete="off">
                         <div id="emoji-picker-trigger" class="emoji-trigger" title="Elegir emoji"></div>
                     </div>
+                    <div id="name-length-hint" class="name-length-hint">0/12</div>
                 </div>
                 <div id="emoji-picker" class="hidden emoji-picker">
-                    <p class="hint">Elige un emoji (opcional)</p>
-                    <div class="emoji-categories">
-                        <div class="emoji-category">
-                            <p class="emoji-cat-label">🐾 Animales</p>
-                            <div class="emoji-grid" id="emoji-animals"></div>
-                        </div>
-                        <div class="emoji-category">
-                            <p class="emoji-cat-label">🍕 Comida</p>
-                            <div class="emoji-grid" id="emoji-food"></div>
-                        </div>
-                        <div class="emoji-category">
-                            <p class="emoji-cat-label">🌿 Naturaleza</p>
-                            <div class="emoji-grid" id="emoji-nature"></div>
-                        </div>
-                    </div>
-                    <button id="emoji-clear" class="btn btn-text btn-sm">Sin emoji</button>
-                </div>
+    <p class="hint">Elige un emoji (opcional)</p>
+    <div class="emoji-categories">
+        <div class="emoji-category">
+            <p class="emoji-cat-label">🐾 Animales</p>
+            <div class="emoji-grid" id="emoji-animals"></div>
+        </div>
+        <div class="emoji-category">
+            <p class="emoji-cat-label">🍕 Comida</p>
+            <div class="emoji-grid" id="emoji-food"></div>
+        </div>
+        <div class="emoji-category">
+            <p class="emoji-cat-label">🌿 Naturaleza</p>
+            <div class="emoji-grid" id="emoji-nature"></div>
+        </div>
+        <div class="emoji-category">
+            <p class="emoji-cat-label">👓 Objetos</p>
+            <div class="emoji-grid" id="emoji-objects"></div>
+        </div>
+        <div class="emoji-category">
+            <p class="emoji-cat-label">✈️ Otros</p>
+            <div class="emoji-grid" id="emoji-others"></div>
+        </div>
+    </div>
+    <button id="emoji-clear" class="btn btn-text btn-sm">Sin emoji</button>
+</div>
                 <div class="form-actions">
                     <button id="join-room-submit" class="btn btn-primary">Entrar</button>
                     <button id="cancel-join" class="btn btn-text">Cancelar</button>
@@ -152,26 +161,55 @@
                 </div>
             </div>
             <div id="game-options" class="card hidden">
-                <h3><i class="fas fa-sliders-h"></i> Opciones de Juego</h3>
-                <div class="options-grid">
-                    <div class="option-item">
-                        <label class="switch"><input type="checkbox" id="option-jump"><span class="slider"></span></label>
-                        <span>⏭️ Salto de pregunta</span>
-                    </div>
-                    <div class="option-item">
-                        <label class="switch"><input type="checkbox" id="option-hard"><span class="slider"></span></label>
-                        <span>💀 Modo difícil</span>
-                    </div>
-                    <div class="option-item">
-                        <label class="switch"><input type="checkbox" id="option-textual"><span class="slider"></span></label>
-                        <span>✍️ Modo textual</span>
-                    </div>
-                    <div class="option-item">
-                        <label class="switch"><input type="checkbox" id="option-timer"><span class="slider"></span></label>
-                        <span>⏱️ Tiempo límite</span>
-                    </div>
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-sliders-h"></i> Opciones de Juego</h3>
+    <div class="options-grid">
+        <div class="option-item">
+            <label class="switch"><input type="checkbox" id="option-jump"><span class="slider"></span></label>
+            <span>⏭️ Salto de pregunta</span>
+        </div>
+        <div class="option-item">
+            <label class="switch"><input type="checkbox" id="option-hard"><span class="slider"></span></label>
+            <span>💀 Modo difícil</span>
+        </div>
+        <div class="option-item">
+            <label class="switch"><input type="checkbox" id="option-textual"><span class="slider"></span></label>
+            <span>✍️ Modo textual</span>
+        </div>
+        <div class="option-item">
+            <label class="switch"><input type="checkbox" id="option-timer"><span class="slider"></span></label>
+            <span>⏱️ Tiempo límite</span>
+        </div>
+    </div>
+    
+    <!-- Configuración de tiempos (visible solo cuando tiempo límite está activado) -->
+    <div id="timer-settings" class="timer-settings hidden">
+        <h4 style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.95rem;">⏱️ Configuración de tiempos</h4>
+        <div class="timer-settings-grid">
+            <div class="timer-setting-item">
+                <label for="timer-text">📝 Texto</label>
+                <div class="timer-input-group">
+                    <input type="number" id="timer-text" min="5" max="60" value="25">
+                    <span class="timer-unit">s</span>
                 </div>
             </div>
+            <div class="timer-setting-item">
+                <label for="timer-options">🔤 Opción múltiple</label>
+                <div class="timer-input-group">
+                    <input type="number" id="timer-options" min="5" max="60" value="15">
+                    <span class="timer-unit">s</span>
+                </div>
+            </div>
+            <div class="timer-setting-item">
+                <label for="timer-anagram">🔀 Anagrama</label>
+                <div class="timer-input-group">
+                    <input type="number" id="timer-anagram" min="5" max="60" value="20">
+                    <span class="timer-unit">s</span>
+                </div>
+            </div>
+        </div>
+        <p class="hint" style="font-size: 0.8rem; margin-top: 8px;">Define el tiempo límite para cada tipo de pregunta</p>
+    </div>
+</div>
             <div class="actions" id="lobby-host-actions">
                 <button id="back-to-questions" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
                 <button id="start-game-lobby" class="btn btn-primary btn-lg"><i class="fas fa-play"></i> Iniciar Juego</button>
