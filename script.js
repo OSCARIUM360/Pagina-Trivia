@@ -574,20 +574,23 @@ class JeopardyGame {
                 answer: '', 
                 used: false, 
                 type: 'text', 
-                options: ['', '', '', ''] 
+                options: ['', ''] 
             };
             q.id = id;
-            // Asegurar que options existe
             if (!q.options || !Array.isArray(q.options)) {
-                q.options = ['', '', '', ''];
+                q.options = ['', ''];
             }
+            // Asegurar al menos 2 opciones
+            while (q.options.length < 2) q.options.push('');
+            // Máximo 4
+            if (q.options.length > 4) q.options = q.options.slice(0, 4);
+            
             this.questions.push(q);
             
             const div = document.createElement('div');
             div.className = 'question-row';
             div.setAttribute('data-qid', id);
             
-            // Determinar clases según tipo
             const isAnagram = q.type === 'anagram';
             const isOptions = q.type === 'options';
             
@@ -602,24 +605,28 @@ class JeopardyGame {
                 </div>
                 <div class="question-inputs">
                     <textarea class="q-input" placeholder="Escribe la pregunta aquí" data-id="${id}" style="${isAnagram ? 'display:none;' : ''}">${q.question || ''}</textarea>
-                    <textarea class="a-input" placeholder="${isAnagram ? 'Palabra para anagrama' : 'Escribe la respuesta correcta'}" data-id="${id}" style="${isOptions ? 'display:none;' : ''}">${q.answer || ''}</textarea>
+                    <textarea class="a-input" placeholder="${isAnagram ? 'Palabra para anagrama' : isOptions ? 'Respuesta correcta (primera opción)' : 'Escribe la respuesta correcta'}" data-id="${id}" style="${isOptions ? 'display:none;' : ''}">${q.answer || ''}</textarea>
                 </div>
                 <div class="options-container" data-id="${id}" style="${isOptions ? '' : 'display:none;'}">
-                    <p class="hint">Opciones (máx 4). La primera es la correcta.</p>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <p class="hint" style="margin:0;">Opciones (${q.options.length}) - La primera es la correcta</p>
+                        <div style="display:flex;gap:4px;">
+                            ${q.options.length > 2 ? `<button class="btn btn-xs btn-danger remove-option-btn" data-id="${id}" title="Quitar opción">−</button>` : ''}
+                            ${q.options.length < 4 ? `<button class="btn btn-xs btn-success add-option-btn" data-id="${id}" title="Agregar opción">+</button>` : ''}
+                        </div>
+                    </div>
                     <div class="options-list" data-id="${id}">
-                        ${(q.options || ['', '', '', '']).slice(0, 4).map((opt, oi) => `
+                        ${(q.options || []).map((opt, oi) => `
                             <div class="options-input-row">
-                                <span style="font-weight:600;width:20px;">${String.fromCharCode(65 + oi)})</span>
-                                <input type="text" class="opt-input" placeholder="Opción ${oi + 1}" value="${opt || ''}" data-qid="${id}" data-oidx="${oi}">
-                                ${oi > 0 ? `<button class="remove-option" data-qid="${id}" data-oidx="${oi}">×</button>` : ''}
+                                <span style="font-weight:600;width:20px;color:${oi === 0 ? 'var(--success)' : 'var(--text-secondary)'};">${String.fromCharCode(65 + oi)})</span>
+                                <input type="text" class="opt-input" placeholder="Opción ${oi + 1}${oi === 0 ? ' (correcta)' : ''}" value="${opt || ''}" data-qid="${id}" data-oidx="${oi}">
                             </div>
                         `).join('')}
                     </div>
-                    ${(q.options || []).length < 4 ? `<button class="btn btn-sm btn-text add-option" data-id="${id}">+ Agregar opción</button>` : ''}
                 </div>`;
             container.appendChild(div);
             
-            // Eventos después de agregar al DOM
+            // Eventos
             setTimeout(() => {
                 const typeSelect = div.querySelector('.q-type');
                 const optionsContainer = div.querySelector('.options-container');
@@ -627,30 +634,26 @@ class JeopardyGame {
                 const aInput = div.querySelector('.a-input');
                 
                 if (typeSelect) {
-                   typeSelect.addEventListener('change', () => {
+                    typeSelect.addEventListener('change', () => {
                         const qObj = this.questions.find(q => q.id === id);
                         if (qObj) qObj.type = typeSelect.value;
                         
                         const isAnagramNow = typeSelect.value === 'anagram';
                         const isOptionsNow = typeSelect.value === 'options';
                         
-                        // Mostrar/ocultar pregunta
                         if (qInput) qInput.style.display = isAnagramNow ? 'none' : '';
-                        
-                        // Mostrar/ocultar respuesta (ocultar en opción múltiple)
                         if (aInput) {
                             aInput.style.display = isOptionsNow ? 'none' : '';
                             aInput.placeholder = isAnagramNow ? 'Palabra para anagrama' : 'Escribe la respuesta correcta';
                         }
-                        
-                        // Mostrar/ocultar opciones
                         if (optionsContainer) {
                             optionsContainer.style.display = isOptionsNow ? '' : 'none';
                         }
                         
-                        // Inicializar opciones si es opción múltiple
-                        if (isOptionsNow && qObj && (!qObj.options || qObj.options.length === 0)) {
-                            qObj.options = ['', '', '', ''];
+                        if (isOptionsNow && qObj) {
+                            if (!qObj.options || qObj.options.length < 2) {
+                                qObj.options = ['', ''];
+                            }
                             this.refreshOptionsList(div, id);
                         }
                         
@@ -658,40 +661,33 @@ class JeopardyGame {
                     });
                 }
                 
-                // Evento para agregar opción
-                const addBtn = div.querySelector('.add-option');
-                if (addBtn) {
-                    addBtn.addEventListener('click', () => {
-                        const qObj = this.questions.find(q => q.id === id);
-                        if (qObj && qObj.options && qObj.options.length < 4) {
-                            qObj.options.push('');
-                            this.refreshOptionsList(div, id);
-                            this.playSound('click');
-                        }
-                    });
-                }
-                
-                // Eventos para eliminar opción y editar
-                div.querySelectorAll('.remove-option').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const qId = parseInt(btn.dataset.qid);
-                        const oIdx = parseInt(btn.dataset.oidx);
-                        const qObj = this.questions.find(q => q.id === qId);
-                        if (qObj && qObj.options && qObj.options.length > 2) {
-                            qObj.options.splice(oIdx, 1);
-                            this.refreshOptionsList(div, qId);
-                            this.playSound('click');
-                        }
-                    });
+                // Botones + y -
+                div.querySelector('.add-option-btn')?.addEventListener('click', () => {
+                    const qObj = this.questions.find(q => q.id === id);
+                    if (qObj && qObj.options && qObj.options.length < 4) {
+                        qObj.options.push('');
+                        this.refreshOptionsList(div, id);
+                        this.playSound('click');
+                    }
                 });
                 
+                div.querySelector('.remove-option-btn')?.addEventListener('click', () => {
+                    const qObj = this.questions.find(q => q.id === id);
+                    if (qObj && qObj.options && qObj.options.length > 2) {
+                        qObj.options.pop();
+                        this.refreshOptionsList(div, id);
+                        this.playSound('click');
+                    }
+                });
+                
+                // Inputs de opciones
                 div.querySelectorAll('.opt-input').forEach(input => {
                     input.addEventListener('input', () => {
-                        const qId = parseInt(input.dataset.qid);
+                        const qId2 = parseInt(input.dataset.qid);
                         const oIdx = parseInt(input.dataset.oidx);
-                        const qObj = this.questions.find(q => q.id === qId);
+                        const qObj = this.questions.find(q => q.id === qId2);
                         if (qObj && qObj.options) {
-                            qObj.options[oIdx] = input.value;
+                            qObj.options[oIdx] = input.value.trim();
                         }
                     });
                 });
@@ -704,14 +700,70 @@ class JeopardyGame {
 }
 
     refreshOptionsList(div, qId) {
-        const q = this.questions.find(q => q.id === qId);
-        if (!q) return;
-        const list = div.querySelector('.options-list');
-        if (!list) return;
-        list.innerHTML = (q.options || []).map((opt, oi) => 
-            `<div class="options-input-row"><input type="text" class="opt-input" placeholder="Opción ${oi + 1}" value="${opt}" data-qid="${qId}" data-oidx="${oi}"></div>`
-        ).join('');
+    const q = this.questions.find(q => q.id === qId);
+    if (!q) return;
+    
+    if (!q.options || !Array.isArray(q.options)) {
+        q.options = ['', ''];
     }
+    while (q.options.length < 2) q.options.push('');
+    if (q.options.length > 4) q.options = q.options.slice(0, 4);
+    
+    const list = div.querySelector('.options-list');
+    const headerDiv = list?.parentElement?.querySelector('div');
+    
+    if (list) {
+        list.innerHTML = q.options.map((opt, oi) => `
+            <div class="options-input-row">
+                <span style="font-weight:600;width:20px;color:${oi === 0 ? 'var(--success)' : 'var(--text-secondary)'};">${String.fromCharCode(65 + oi)})</span>
+                <input type="text" class="opt-input" placeholder="Opción ${oi + 1}${oi === 0 ? ' (correcta)' : ''}" value="${opt || ''}" data-qid="${qId}" data-oidx="${oi}">
+            </div>
+        `).join('');
+        
+        // Re-vincular eventos de inputs
+        list.querySelectorAll('.opt-input').forEach(input => {
+            input.addEventListener('input', () => {
+                const qId2 = parseInt(input.dataset.qid);
+                const oIdx = parseInt(input.dataset.oidx);
+                const qObj = this.questions.find(q => q.id === qId2);
+                if (qObj && qObj.options) {
+                    qObj.options[oIdx] = input.value.trim();
+                }
+            });
+        });
+    }
+    
+    // Actualizar header con conteo y botones
+    if (headerDiv) {
+        const hintEl = headerDiv.querySelector('.hint');
+        const btnContainer = headerDiv.querySelector('div:last-child');
+        
+        if (hintEl) hintEl.textContent = `Opciones (${q.options.length}) - La primera es la correcta`;
+        if (btnContainer) {
+            btnContainer.innerHTML = `
+                ${q.options.length > 2 ? `<button class="btn btn-xs btn-danger remove-option-btn" data-id="${qId}" title="Quitar opción">−</button>` : ''}
+                ${q.options.length < 4 ? `<button class="btn btn-xs btn-success add-option-btn" data-id="${qId}" title="Agregar opción">+</button>` : ''}
+            `;
+            
+            // Re-vincular eventos
+            btnContainer.querySelector('.add-option-btn')?.addEventListener('click', () => {
+                if (q.options && q.options.length < 4) {
+                    q.options.push('');
+                    this.refreshOptionsList(div, qId);
+                    this.playSound('click');
+                }
+            });
+            
+            btnContainer.querySelector('.remove-option-btn')?.addEventListener('click', () => {
+                if (q.options && q.options.length > 2) {
+                    q.options.pop();
+                    this.refreshOptionsList(div, qId);
+                    this.playSound('click');
+                }
+            });
+        }
+    }
+}
 
     submitQuestions() {
     if (!this.isHost) return;
@@ -730,7 +782,7 @@ class JeopardyGame {
         if (q) q.question = input.value.trim();
     });
     
-    // Guardar respuestas
+    // Guardar respuestas (solo para text y anagram)
     document.querySelectorAll('.a-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
@@ -741,93 +793,55 @@ class JeopardyGame {
     document.querySelectorAll('.options-container').forEach(container => {
         const qId = parseInt(container.dataset.id);
         const q = this.questions.find(q => q.id === qId);
-        if (!q) return;
+        if (!q || q.type !== 'options') return;
         
-        // Recoger opciones de los inputs
         const optInputs = container.querySelectorAll('.opt-input');
-        if (optInputs.length > 0 && q.type === 'options') {
-            q.options = [];
-            optInputs.forEach(input => {
-                const val = input.value.trim();
-                if (val) q.options.push(val);
-            });
-            // La respuesta correcta es la primera opción
-            if (q.options.length > 0) {
-                q.answer = q.options[0];
-            }
+        q.options = [];
+        optInputs.forEach(input => {
+            const val = input.value.trim();
+            q.options.push(val);
+        });
+        
+        // Filtrar vacías
+        const filled = q.options.filter(o => o);
+        if (filled.length > 0) {
+            q.answer = filled[0]; // La primera es la correcta
         }
-    });
-    
-    // También guardar opciones sueltas por si acaso
-    document.querySelectorAll('.opt-input').forEach(input => {
-        const qId = parseInt(input.dataset.qid);
-        const oIdx = parseInt(input.dataset.oidx);
-        const q = this.questions.find(q => q.id === qId);
-        if (q && q.options && q.type === 'options') {
-            q.options[oIdx] = input.value.trim();
-            // Asegurar que answer sea la primera opción
-            if (oIdx === 0 && input.value.trim()) {
-                q.answer = input.value.trim();
-            }
-        }
+        if (q.options.length < 2) q.options = ['', ''];
     });
     
     // Validar
     let valid = true;
     for (const q of this.questions) {
-        console.log('Validando pregunta:', q.id, 'tipo:', q.type, 'pregunta:', q.question, 'respuesta:', q.answer, 'opciones:', q.options);
-        
         if (q.type === 'anagram') {
             if (!q.answer || !q.answer.trim()) {
-                alert(`Falta la palabra para el anagrama: ${q.category} ${q.points}pts`);
-                valid = false;
-                break;
-            }
-            if (!q.question || !q.question.trim()) {
-                q.question = 'Ordena las letras para formar la palabra correcta';
+                alert(`Falta la palabra: ${q.category} ${q.points}pts`);
+                valid = false; break;
             }
         } else if (q.type === 'options') {
             if (!q.question || !q.question.trim()) {
                 alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
-                valid = false;
-                break;
+                valid = false; break;
             }
-            
-            // Asegurar que options existe
-            if (!q.options || !Array.isArray(q.options)) {
-                q.options = [];
+            const filled = (q.options || []).filter(o => o && o.trim());
+            if (filled.length < 2) {
+                alert(`Mínimo 2 opciones: ${q.category} ${q.points}pts`);
+                valid = false; break;
             }
-            
-            // Filtrar opciones vacías
-            q.options = q.options.filter(o => o && o.trim());
-            
-            if (q.options.length < 2) {
-                alert(`Opción múltiple necesita al menos 2 opciones: ${q.category} ${q.points}pts\nOpciones encontradas: ${q.options.length}`);
-                valid = false;
-                break;
-            }
-            
-            // La respuesta correcta es la primera opción
-            q.answer = q.options[0].trim();
-            console.log('Opción múltiple - respuesta establecida:', q.answer);
-            
+            q.answer = filled[0];
         } else {
-            // Texto normal
             if (!q.question || !q.question.trim()) {
                 alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
-                valid = false;
-                break;
+                valid = false; break;
             }
             if (!q.answer || !q.answer.trim()) {
                 alert(`Falta la respuesta: ${q.category} ${q.points}pts`);
-                valid = false;
-                break;
+                valid = false; break;
             }
         }
     }
     
     if (valid) {
-        console.log('Validación exitosa, preguntas:', this.questions);
         this.showLobby();
         this.saveState();
     }
@@ -837,16 +851,13 @@ class JeopardyGame {
     if (!this.isHost) return;
     
     // Actualizar preguntas desde los inputs
-    const qInputs = document.querySelectorAll('.q-input');
-    const aInputs = document.querySelectorAll('.a-input');
-    
-    qInputs.forEach(input => {
+    document.querySelectorAll('.q-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.question = input.value.trim();
     });
     
-    aInputs.forEach(input => {
+    document.querySelectorAll('.a-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.answer = input.value.trim();
@@ -862,17 +873,29 @@ class JeopardyGame {
     
     if (this.questions.length === 0) return alert('Primero crea las preguntas');
     
-    // Validar que todas tengan datos
+    // Validar
     for (const q of this.questions) {
         if (q.type === 'anagram') {
-            if (!q.answer || !q.answer.trim()) return alert(`Falta la palabra del anagrama: ${q.category} ${q.points}pts`);
+            if (!q.answer || !q.answer.trim()) {
+                return alert(`Falta la palabra del anagrama: ${q.category} ${q.points}pts`);
+            }
         } else if (q.type === 'options') {
-            if (!q.question || !q.question.trim()) return alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
+            if (!q.question || !q.question.trim()) {
+                return alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
+            }
             const filledOpts = (q.options || []).filter(o => o && o.trim());
-            if (filledOpts.length < 2) return alert(`Faltan opciones: ${q.category} ${q.points}pts`);
+            if (filledOpts.length < 2) {
+                return alert(`Faltan opciones (mínimo 2): ${q.category} ${q.points}pts`);
+            }
+            // Asegurar que answer sea la primera opción
+            q.answer = filledOpts[0];
         } else {
-            if (!q.question || !q.question.trim()) return alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
-            if (!q.answer || !q.answer.trim()) return alert(`Falta la respuesta: ${q.category} ${q.points}pts`);
+            if (!q.question || !q.question.trim()) {
+                return alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
+            }
+            if (!q.answer || !q.answer.trim()) {
+                return alert(`Falta la respuesta: ${q.category} ${q.points}pts`);
+            }
         }
     }
     
@@ -886,7 +909,7 @@ class JeopardyGame {
             q: q.question,
             a: q.answer,
             t: q.type || 'text',
-            opts: q.options || []
+            opts: (q.options || []).filter(o => o && o.trim())
         }))
     };
     
