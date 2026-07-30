@@ -533,7 +533,10 @@ class JeopardyGame {
                 this.jumpEnabled = data.jumpEnabled || false;
                 this.hardMode = data.hardMode || false;
                 this.textualMode = data.textualMode || false;
-                this.timerEnabled = data.timerEnabled || false; // [NUEVO]
+                this.timerEnabled = data.timerEnabled || false;
+                this.timerTextSeconds = data.timerTextSeconds || 25;
+                this.timerOptionsSeconds = data.timerOptionsSeconds || 15;
+                this.timerAnagramSeconds = data.timerAnagramSeconds || 20;
                 this.updateLobby();
                 if (data.gameStarted) {
                     this.loadGameState(data);
@@ -579,12 +582,20 @@ class JeopardyGame {
                 this.showJumpNotification(data);
                 break;
                 
-            case 'timer-jump': // [NUEVO]
+            case 'timer-jump':
                 this.handleTimerJump(data);
                 break;
                 
-            case 'timer-timeout-all': // [NUEVO]
+            case 'timer-timeout-all':
                 this.handleTimerTimeoutAll(data);
+                break;
+                
+            case 'timer-update': // [NUEVO] Actualización del temporizador
+                this.updatePlayerTimer(data.seconds, data.isWarning);
+                break;
+                
+            case 'clear-player-selections': // [NUEVO] Limpiar selecciones
+                this.clearPlayerSelections();
                 break;
                 
             case 'close-modal':
@@ -696,19 +707,30 @@ class JeopardyGame {
     // ==================== MODO TEXTUAL ====================
     
     handlePlayerSelectQuestion(conn, data) {
-        if (!this.isHost || !this.textualMode || !this.gameStarted) return;
-        const playerName = conn.metadata?.name;
-        const playerIndex = this.players.findIndex(p => p.name === playerName);
-        if (playerIndex !== this.currentPlayer) return;
+    if (!this.isHost || !this.textualMode || !this.gameStarted) return;
+    const playerName = conn.metadata?.name;
+    const playerIndex = this.players.findIndex(p => p.name === playerName);
+    if (playerIndex !== this.currentPlayer) return;
+    
+    // [CORREGIDO] Buscar la pregunta por ID correctamente
+    const q = this.questions.find(q => q.id === data.questionId && !q.used);
+    if (q) {
+        // Limpiar selecciones anteriores de todos los jugadores
+        this.broadcast({ type: 'clear-player-selections' });
         
-        // Marcar la pregunta en el tablero del host
-        const q = this.questions.find(q => q.id === data.questionId && !q.used);
-        if (q) {
-            this.broadcast({ type: 'question-assigned', questionId: q.id, category: q.category, points: q.points });
-            // Destacar la celda en el tablero del host
-            this.highlightCell(q);
-        }
+        // Notificar al host qué pregunta fue seleccionada
+        this.broadcast({ 
+            type: 'question-assigned', 
+            questionId: q.id, 
+            category: q.category, 
+            points: q.points,
+            playerName: playerName 
+        });
+        
+        // Destacar la celda en el tablero del host
+        this.highlightCell(q);
     }
+}
     
     highlightCell(q) {
         const cells = document.querySelectorAll('.game-cell.clickable');
@@ -1259,44 +1281,76 @@ class JeopardyGame {
 }
 
     renderBoard() {
-        const board = document.getElementById('game-board'); if (!board) return; board.innerHTML = '';
-        board.style.gridTemplateColumns = `repeat(${this.totalCategories + 1}, 1fr)`;
-        const ph = document.createElement('div'); ph.className = 'game-cell category'; ph.textContent = 'Pts'; board.appendChild(ph);
-        this.categories.forEach(cat => { const h = document.createElement('div'); h.className = 'game-cell category'; h.textContent = cat; board.appendChild(h); });
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.innerHTML = '';
+    board.style.gridTemplateColumns = `repeat(${this.totalCategories + 1}, 1fr)`;
+    
+    const ph = document.createElement('div');
+    ph.className = 'game-cell category';
+    ph.textContent = 'Pts';
+    board.appendChild(ph);
+    
+    this.categories.forEach(cat => {
+        const h = document.createElement('div');
+        h.className = 'game-cell category';
+        h.textContent = cat;
+        board.appendChild(h);
+    });
+    
+    // [NUEVO] Para tracking de selección de jugadores
+    let selectedCell = null;
+    let selectedQuestionId = null;
+    
+    for (let i = 0; i < this.questionsPerCategory; i++) {
+        const pc = document.createElement('div');
+        pc.className = 'game-cell category';
+        pc.textContent = (i + 1) * 100;
+        board.appendChild(pc);
         
-        for (let i = 0; i < this.questionsPerCategory; i++) {
-            const pc = document.createElement('div'); pc.className = 'game-cell category'; pc.textContent = (i + 1) * 100; board.appendChild(pc);
-            this.categories.forEach(cat => {
-                const q = this.questions.find(q => q.category === cat && q.points === (i + 1) * 100);
-                const cell = document.createElement('div');
-                cell.className = `game-cell ${q?.used ? 'used' : 'clickable'}`;
-                cell.textContent = q?.used ? '✓' : (i + 1) * 100;
-                cell.dataset.questionId = q?.id;
-                cell.dataset.category = cat;
-                cell.dataset.points = (i + 1) * 100;
-                
-                if (!q?.used) {
-                    if (this.isHost) {
-                        cell.addEventListener('click', () => this.selectQuestion(q));
-                    } else if (this.textualMode) {
-                        // En modo textual, los jugadores pueden seleccionar preguntas
-                        cell.addEventListener('click', () => {
-                            if (this.isHost) return;
-                            const myIndex = this.players.findIndex(p => p.name === this.playerName);
-                            if (myIndex === this.currentPlayer && this.connections.length > 0) {
-                                this.connections[0].send({ type: 'player-select-question', questionId: q.id });
-                                cell.classList.add('player-selected');
-                                this.showToast('📤 Solicitando: ' + q.category + ' - ' + q.points + 'pts');
+        this.categories.forEach(cat => {
+            const q = this.questions.find(q => q.category === cat && q.points === (i + 1) * 100);
+            const cell = document.createElement('div');
+            cell.className = `game-cell ${q?.used ? 'used' : 'clickable'}`;
+            cell.textContent = q?.used ? '✓' : (i + 1) * 100;
+            cell.dataset.questionId = q?.id;
+            cell.dataset.category = cat;
+            cell.dataset.points = (i + 1) * 100;
+            
+            if (!q?.used) {
+                if (this.isHost) {
+                    cell.addEventListener('click', () => this.selectQuestion(q));
+                } else if (this.textualMode) {
+                    // [CORREGIDO] Selección para jugadores - solo una a la vez
+                    cell.addEventListener('click', () => {
+                        if (this.isHost) return;
+                        const myIndex = this.players.findIndex(p => p.name === this.playerName);
+                        if (myIndex === this.currentPlayer && this.connections.length > 0) {
+                            // Deseleccionar anterior
+                            if (selectedCell) {
+                                selectedCell.classList.remove('player-selected');
                             }
-                        });
-                    }
+                            // Seleccionar nueva
+                            cell.classList.add('player-selected');
+                            selectedCell = cell;
+                            selectedQuestionId = q.id;
+                            
+                            this.connections[0].send({ 
+                                type: 'player-select-question', 
+                                questionId: q.id 
+                            });
+                            this.showToast('📤 Seleccionaste: ' + q.category + ' - ' + q.points + 'pts');
+                        }
+                    });
                 }
-                board.appendChild(cell);
-            });
-        }
-        
-        this.renderPlayers(); this.updateTurnIndicator();
+            }
+            board.appendChild(cell);
+        });
     }
+    
+    this.renderPlayers();
+    this.updateTurnIndicator();
+}
 
     renderPlayers() {
         const bar = document.getElementById('players-bar'); if (!bar) return; bar.innerHTML = '';
@@ -1342,7 +1396,6 @@ class JeopardyGame {
     this.currentShuffledOptions = null;
     this.currentShuffledLetters = null;
     
-    // [NUEVO] Reiniciar contador de saltos
     this.jumpCount = 0;
     this.playersJumped = new Set();
     this.playersJumped.add(this.players[this.currentPlayer]?.name);
@@ -1416,7 +1469,6 @@ class JeopardyGame {
     
     document.getElementById('question-modal').classList.add('active');
     
-    // [NUEVO] Iniciar temporizador si está habilitado
     if (this.timerEnabled) {
         this.startTimer(q.type);
     }
@@ -1427,7 +1479,8 @@ class JeopardyGame {
         points: q.points,
         question: q.question || 'Ordena las letras para formar la palabra correcta',
         qType: q.type || 'text',
-        currentPlayer: this.currentPlayer
+        currentPlayer: this.currentPlayer,
+        correctAnswer: q.answer // [NUEVO] Enviar respuesta correcta al host
     };
     
     if (q.type === 'options' && this.currentShuffledOptions) {
@@ -1508,7 +1561,17 @@ class JeopardyGame {
         typeBadge.classList.add('hidden');
     }
     
-    document.getElementById('answer-buttons').style.display = 'none';
+    // [NUEVO] Si es el HOST, mostrar la respuesta correcta siempre
+    if (this.isHost && data.correctAnswer) {
+        const answerDiv = document.getElementById('modal-answer');
+        answerDiv.classList.remove('hidden');
+        answerDiv.className = 'answer-reveal';
+        document.getElementById('correct-answer-text').textContent = '🔑 Respuesta correcta: ' + data.correctAnswer;
+        document.getElementById('answer-buttons').style.display = 'flex';
+    } else {
+        document.getElementById('answer-buttons').style.display = 'none';
+    }
+    
     document.getElementById('btn-correct').style.display = 'none';
     document.getElementById('btn-incorrect').style.display = 'none';
     document.getElementById('btn-jump').classList.add('hidden');
@@ -1518,14 +1581,11 @@ class JeopardyGame {
     
     document.getElementById('question-modal').classList.add('active');
     
-    // Cerrar modal de respuesta anterior siempre
     document.getElementById('player-answer-modal').classList.remove('active');
     
-    // Modo textual: solo el jugador del turno puede responder
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
-            // Pequeño delay para asegurar que el modal anterior se cerró
             setTimeout(() => {
                 this.showPlayerAnswerModal({
                     category: data.category,
@@ -1689,14 +1749,19 @@ class JeopardyGame {
         ind.classList.add('jump-animation');
     }
     
-    // Cerrar modal de respuesta del jugador anterior
+    // [NUEVO] Mostrar respuesta correcta al host si está disponible
+    if (this.isHost && data.correctAnswer) {
+        const answerDiv = document.getElementById('modal-answer');
+        answerDiv.classList.remove('hidden');
+        answerDiv.className = 'answer-reveal';
+        document.getElementById('correct-answer-text').textContent = '🔑 Respuesta correcta: ' + data.correctAnswer;
+    }
+    
     document.getElementById('player-answer-modal').classList.remove('active');
     
-    // Si es modo textual y soy el nuevo jugador, mostrar modal de respuesta
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer && data.questionType) {
-            // Reabrir modal de respuesta para el nuevo jugador
             setTimeout(() => {
                 this.showPlayerAnswerModal({
                     category: data.category || this.currentQuestion?.category || '',
@@ -2127,6 +2192,7 @@ stopTimer() {
 }
 
 updateTimerDisplay(seconds) {
+    // Mostrar en el modal del host
     let timerEl = document.getElementById('modal-timer');
     if (!timerEl) {
         const modalContent = document.querySelector('#question-modal .modal-content');
@@ -2158,6 +2224,7 @@ updateTimerDisplay(seconds) {
         }
     }
     
+    // [NUEVO] Mostrar en el modal del jugador
     let playerTimerEl = document.getElementById('player-modal-timer');
     if (!playerTimerEl) {
         const playerModalContent = document.querySelector('#player-answer-modal .modal-content');
@@ -2183,6 +2250,15 @@ updateTimerDisplay(seconds) {
             playerTimerEl.style.animation = '';
         }
     }
+    
+    // [NUEVO] Broadcast del tiempo para todos los jugadores
+    if (this.isHost) {
+        this.broadcast({
+            type: 'timer-update',
+            seconds: seconds,
+            isWarning: seconds <= 5
+        });
+    }
 }
 
 hideTimerDisplay() {
@@ -2201,7 +2277,13 @@ handleTimerTimeout() {
     const currentPlayer = this.players[this.currentPlayer];
     const playerName = currentPlayer?.name || '';
     
-    // Verificar si ya se intentó con todos los jugadores
+    // [NUEVO] Restar puntos si está en modo difícil
+    if (this.hardMode) {
+        const penalty = Math.floor(this.currentQuestion.points / 2);
+        currentPlayer.score -= penalty;
+        if (currentPlayer.score < 0) currentPlayer.score = 0;
+    }
+    
     const activePlayers = this.players.filter(p => !p.isHost);
     const allJumped = activePlayers.every(p => this.playersJumped.has(p.name));
     
@@ -2231,7 +2313,6 @@ handleTimerTimeout() {
         return;
     }
     
-    // Saltar al siguiente jugador
     let nextPlayer = this.currentPlayer;
     let attempts = 0;
     const totalPlayers = this.players.length;
@@ -2366,6 +2447,14 @@ handleTimerJump(data) {
         ind.classList.add('jump-animation');
     }
     
+    // [NUEVO] Mostrar respuesta correcta al host si está disponible
+    if (this.isHost && data.correctAnswer) {
+        const answerDiv = document.getElementById('modal-answer');
+        answerDiv.classList.remove('hidden');
+        answerDiv.className = 'answer-reveal incorrect-anim';
+        document.getElementById('correct-answer-text').textContent = '⏰ Tiempo agotado. Respuesta correcta: ' + data.correctAnswer;
+    }
+    
     document.getElementById('player-answer-modal').classList.remove('active');
     
     if (this.textualMode && !this.isHost) {
@@ -2412,5 +2501,28 @@ toggleTimerSettings(show) {
             settings.classList.add('hidden');
         }
     }
+}
+
+// [NUEVO] Actualizar timer para jugadores
+updatePlayerTimer(seconds, isWarning) {
+    const playerTimerEl = document.getElementById('player-modal-timer');
+    if (playerTimerEl) {
+        playerTimerEl.textContent = `⏱️ ${seconds}s`;
+        playerTimerEl.style.display = 'block';
+        if (isWarning) {
+            playerTimerEl.style.color = '#ef4444';
+            playerTimerEl.style.animation = 'pulse 0.5s infinite';
+        } else {
+            playerTimerEl.style.color = '';
+            playerTimerEl.style.animation = '';
+        }
+    }
+}
+
+// [NUEVO] Limpiar selecciones de jugadores
+clearPlayerSelections() {
+    document.querySelectorAll('.game-cell.player-selected').forEach(el => {
+        el.classList.remove('player-selected');
+    });
 }
 }
