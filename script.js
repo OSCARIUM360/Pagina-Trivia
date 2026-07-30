@@ -391,11 +391,23 @@ class JeopardyGame {
                 case 'player-turn': this.handlePlayerTurn(data); break;
             }
         } else {
-            if (data.type === 'join-request') this.handleJoinRequest(conn, data);
-            else if (data.type === 'leave-request') this.handleLeaveRequest(conn, data);
-            else if (data.type === 'player-select-question') this.handlePlayerSelectQuestion(conn, data);
-            else if (data.type === 'player-answer') this.handlePlayerAnswer(conn, data);
+    // SOY HOST
+    if (data.type === 'join-request') {
+        this.handleJoinRequest(conn, data);
+    } else if (data.type === 'leave-request') {
+        this.handleLeaveRequest(conn, data);
+    } else if (data.type === 'player-select-question') {
+        this.handlePlayerSelectQuestion(conn, data);
+    } else if (data.type === 'player-answer') {
+        this.playerAnswer = data.answer;
+        document.getElementById('player-answer-section').classList.remove('hidden');
+        document.getElementById('player-answer-text').textContent = '"' + data.answer + '"';
+        document.getElementById('answer-buttons').style.display = 'flex';
+        if (data.isCorrect !== undefined) {
+            this.handleAnswer(data.isCorrect);
         }
+    }
+}
     }
 
     handleJoinRequest(conn, data) {
@@ -477,21 +489,21 @@ class JeopardyGame {
     }
     
     sendPlayerAnswer() {
-        if (this.isHost || !this.textualMode) return;
-        const input = document.getElementById('player-answer-input');
-        if (!input || !input.value.trim()) return alert('Escribe tu respuesta');
-        
-        const answer = input.value.trim();
-        if (this.connections.length > 0) {
-            this.connections[0].send({ type: 'player-answer', answer });
-        }
-        
-        document.getElementById('player-answer-status').classList.remove('hidden');
-        document.getElementById('player-answer-status').textContent = '✅ Respuesta enviada. Esperando veredicto...';
-        document.getElementById('btn-send-answer').disabled = true;
-        input.disabled = true;
-        this.playSound('send');
+    if (this.isHost || !this.textualMode) return;
+    const input = document.getElementById('player-answer-input');
+    if (!input || !input.value.trim()) return alert('Escribe tu respuesta');
+    
+    const answer = input.value.trim();
+    if (this.connections.length > 0) {
+        this.connections[0].send({ type: 'player-answer', answer });
     }
+    
+    document.getElementById('player-answer-status').classList.remove('hidden');
+    document.getElementById('player-answer-status').textContent = '✅ Respuesta enviada. Esperando veredicto del host...';
+    document.getElementById('btn-send-answer').disabled = true;
+    input.disabled = true;
+    this.playSound('send');
+}
 
     leaveLobby() {
         if (this.isHost) return;
@@ -580,9 +592,7 @@ class JeopardyGame {
             if (!q.options || !Array.isArray(q.options)) {
                 q.options = ['', ''];
             }
-            // Asegurar al menos 2 opciones
             while (q.options.length < 2) q.options.push('');
-            // Máximo 4
             if (q.options.length > 4) q.options = q.options.slice(0, 4);
             
             this.questions.push(q);
@@ -626,7 +636,6 @@ class JeopardyGame {
                 </div>`;
             container.appendChild(div);
             
-            // Eventos
             setTimeout(() => {
                 const typeSelect = div.querySelector('.q-type');
                 const optionsContainer = div.querySelector('.options-container');
@@ -661,39 +670,34 @@ class JeopardyGame {
                     });
                 }
                 
-                // Botones + y -
-                // Botones + y - (usar querySelectorAll para todos)
-div.querySelectorAll('.add-opt-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const qId2 = parseInt(btn.dataset.qid);
-        const qObj = this.questions.find(q => q.id === qId2);
-        console.log('Agregar opción. Actual:', qObj?.options?.length);
-        if (qObj && qObj.options && qObj.options.length < 4) {
-            qObj.options.push('');
-            this.refreshOptionsList(div, qId2);
-            this.playSound('click');
-        }
-    });
-});
-
-div.querySelectorAll('.remove-opt-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const qId2 = parseInt(btn.dataset.qid);
-        const qObj = this.questions.find(q => q.id === qId2);
-        console.log('Quitar opción. Actual:', qObj?.options?.length);
-        if (qObj && qObj.options && qObj.options.length > 2) {
-            qObj.options.pop();
-            this.refreshOptionsList(div, qId2);
-            this.playSound('click');
-        }
-    });
-});
+                div.querySelectorAll('.add-opt-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const qId2 = parseInt(btn.dataset.qid);
+                        const qObj = this.questions.find(q => q.id === qId2);
+                        if (qObj && qObj.options && qObj.options.length < 4) {
+                            qObj.options.push('');
+                            this.refreshOptionsList(div, qId2);
+                            this.playSound('click');
+                        }
+                    });
+                });
                 
-                // Inputs de opciones
+                div.querySelectorAll('.remove-opt-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const qId2 = parseInt(btn.dataset.qid);
+                        const qObj = this.questions.find(q => q.id === qId2);
+                        if (qObj && qObj.options && qObj.options.length > 2) {
+                            qObj.options.pop();
+                            this.refreshOptionsList(div, qId2);
+                            this.playSound('click');
+                        }
+                    });
+                });
+                
                 div.querySelectorAll('.opt-input').forEach(input => {
                     input.addEventListener('input', () => {
                         const qId2 = parseInt(input.dataset.qid);
@@ -722,7 +726,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     while (q.options.length < 2) q.options.push('');
     if (q.options.length > 4) q.options = q.options.slice(0, 4);
     
-    // Actualizar lista de opciones
     const list = div.querySelector('.options-list');
     if (list) {
         list.innerHTML = q.options.map((opt, oi) => `
@@ -732,7 +735,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
             </div>
         `).join('');
         
-        // Re-vincular inputs
         list.querySelectorAll('.opt-input').forEach(input => {
             input.addEventListener('input', () => {
                 const qId2 = parseInt(input.dataset.qid);
@@ -743,11 +745,9 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         });
     }
     
-    // Actualizar contador
     const countEl = div.querySelector('.options-count');
     if (countEl) countEl.textContent = `Opciones (${q.options.length}) - La primera es la correcta`;
     
-    // Actualizar botones + y -
     const btnsContainer = div.querySelector('.options-btns');
     if (btnsContainer) {
         btnsContainer.innerHTML = `
@@ -755,7 +755,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
             ${q.options.length < 4 ? `<button type="button" class="btn btn-xs btn-success add-opt-btn" data-qid="${qId}">+</button>` : ''}
         `;
         
-        // Re-vincular eventos
         btnsContainer.querySelectorAll('.add-opt-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -783,10 +782,8 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     submitQuestions() {
     if (!this.isHost) return;
     
-    // Guardar todo desde el DOM
     this.saveAllQuestionsFromDOM();
     
-    // Validar
     let valid = true;
     for (const q of this.questions) {
         console.log('Submit - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options);
@@ -831,12 +828,10 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     exportTrivia() {
     if (!this.isHost) return;
     
-    // Primero guardar todo desde los inputs actuales
     this.saveAllQuestionsFromDOM();
     
     if (this.questions.length === 0) return alert('Primero crea las preguntas');
     
-    // Validar
     for (const q of this.questions) {
         console.log('Export - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options);
         
@@ -852,7 +847,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
             if (filledOpts.length < 2) {
                 return alert(`Faltan opciones (mínimo 2): ${q.category} ${q.points}pts`);
             }
-            // La respuesta es la primera opción
             q.answer = filledOpts[0];
         } else {
             if (!q.question || !q.question.trim()) {
@@ -1047,8 +1041,9 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     this.questionJumped = false;
     this.originalPlayer = this.currentPlayer;
     this.playerAnswer = null;
+    this.currentShuffledOptions = null;
+    this.currentShuffledLetters = null;
     
-    // Limpiar modal
     document.getElementById('modal-category').textContent = `${q.category} — ${q.points} pts`;
     document.getElementById('modal-question').textContent = q.question || 'Ordena las letras para formar la palabra correcta';
     document.getElementById('modal-answer').classList.add('hidden');
@@ -1056,7 +1051,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     document.getElementById('modal-options').classList.add('hidden');
     document.getElementById('modal-anagram').classList.add('hidden');
     
-    // Tipo de pregunta
     const typeBadge = document.getElementById('modal-question-type');
     typeBadge.classList.remove('hidden', 'anagram', 'options');
     
@@ -1064,26 +1058,23 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         typeBadge.textContent = '🔤 Opción múltiple';
         typeBadge.classList.add('options');
         
-        // Mostrar opciones como botones clickeables para el host
         const optionsDiv = document.getElementById('modal-options');
         optionsDiv.classList.remove('hidden');
         const validOptions = (q.options || []).filter(opt => opt && opt.trim());
         const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
+        this.currentShuffledOptions = shuffled;
         optionsDiv.innerHTML = shuffled.map((opt, i) => 
             `<button class="option-btn host-option-btn" data-option="${this.escapeHtml(opt)}">${String.fromCharCode(65 + i)}) ${opt}</button>`
         ).join('');
         
-        // Eventos para que el host pueda elegir opción
         optionsDiv.querySelectorAll('.host-option-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const selectedOption = btn.dataset.option;
                 const isCorrect = selectedOption.trim().toLowerCase() === q.answer.trim().toLowerCase();
-                console.log('Host eligió:', selectedOption, 'Correcta:', q.answer, 'Acierto:', isCorrect);
                 this.handleOptionChoice(isCorrect, selectedOption);
             });
         });
         
-        // Ocultar botones de correcto/incorrecto
         document.getElementById('answer-buttons').style.display = 'none';
         document.getElementById('btn-correct').style.display = 'none';
         document.getElementById('btn-incorrect').style.display = 'none';
@@ -1093,13 +1084,12 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         typeBadge.textContent = '🔀 Anagrama';
         typeBadge.classList.add('anagram');
         
-        // Mostrar anagrama
         const anagramDiv = document.getElementById('modal-anagram');
         anagramDiv.classList.remove('hidden');
         const letters = q.answer.split('').sort(() => Math.random() - 0.5);
+        this.currentShuffledLetters = letters;
         anagramDiv.innerHTML = letters.map(l => `<div class="anagram-letter">${l}</div>`).join('');
         
-        // Mostrar botones normales
         document.getElementById('answer-buttons').style.display = 'flex';
         document.getElementById('btn-correct').style.display = 'inline-flex';
         document.getElementById('btn-incorrect').style.display = 'inline-flex';
@@ -1107,7 +1097,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled);
         
     } else {
-        // Texto normal
         typeBadge.classList.add('hidden');
         document.getElementById('answer-buttons').style.display = 'flex';
         document.getElementById('btn-correct').style.display = 'inline-flex';
@@ -1124,19 +1113,22 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     
     document.getElementById('question-modal').classList.add('active');
     
-    // Broadcast a jugadores
     const broadcastData = {
         type: 'question-selected',
         category: q.category,
         points: q.points,
         question: q.question || 'Ordena las letras para formar la palabra correcta',
         qType: q.type || 'text',
-        options: q.options || [],
         currentPlayer: this.currentPlayer
     };
     
-    if (q.type === 'anagram' && q.answer) {
-        broadcastData.anagramLetters = q.answer.split('').sort(() => Math.random() - 0.5);
+    if (q.type === 'options' && this.currentShuffledOptions) {
+        broadcastData.options = this.currentShuffledOptions;
+        broadcastData.correctAnswer = q.answer;
+    }
+    
+    if (q.type === 'anagram' && this.currentShuffledLetters) {
+        broadcastData.anagramLetters = this.currentShuffledLetters;
     }
     
     console.log('Broadcast:', broadcastData);
@@ -1188,10 +1180,8 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         
         const optionsDiv = document.getElementById('modal-options');
         optionsDiv.classList.remove('hidden');
-        const validOptions = (data.options || []).filter(opt => opt && opt.trim());
-        const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
-        // Solo mostrar, no clickeables para jugadores
-        optionsDiv.innerHTML = shuffled.map((opt, i) => 
+        const options = data.options || [];
+        optionsDiv.innerHTML = options.map((opt, i) => 
             `<div class="option-btn">${String.fromCharCode(65 + i)}) ${opt}</div>`
         ).join('');
         
@@ -1218,7 +1208,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     
     document.getElementById('question-modal').classList.add('active');
     
-    // Modo textual
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
@@ -1228,7 +1217,8 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
                 question: data.question,
                 type: questionType,
                 options: data.options,
-                anagramLetters: data.anagramLetters
+                anagramLetters: data.anagramLetters,
+                correctAnswer: data.correctAnswer
             });
         }
     }
@@ -1254,27 +1244,22 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     document.getElementById('player-modal-options').classList.add('hidden');
     document.getElementById('player-modal-anagram').classList.add('hidden');
     
-    // Si es opción múltiple, mostrar opciones clickeables
     if (data.type === 'options' && data.options) {
         const optDiv = document.getElementById('player-modal-options');
         optDiv.classList.remove('hidden');
-        const validOptions = data.options.filter(opt => opt && opt.trim());
-        const shuffled = [...validOptions].sort(() => Math.random() - 0.5);
-        optDiv.innerHTML = shuffled.map((opt, i) => 
+        optDiv.innerHTML = data.options.map((opt, i) => 
             `<button class="option-btn player-option-btn" data-option="${this.escapeHtml(opt)}">${String.fromCharCode(65 + i)}) ${opt}</button>`
         ).join('');
         
-        // Ocultar input de texto
         document.getElementById('player-answer-input').style.display = 'none';
         document.getElementById('btn-send-answer').style.display = 'none';
         
-        // Eventos para elegir opción
         optDiv.querySelectorAll('.player-option-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const chosen = btn.dataset.option;
                 document.getElementById('player-answer-input').value = chosen;
-                // Auto-enviar
-                this.sendPlayerAnswer();
+                const isCorrect = data.correctAnswer && chosen.trim().toLowerCase() === data.correctAnswer.trim().toLowerCase();
+                this.sendPlayerAnswerWithOption(chosen, isCorrect);
             });
         });
     } else {
@@ -1282,7 +1267,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         document.getElementById('btn-send-answer').style.display = '';
     }
     
-    // Anagrama
     if (data.type === 'anagram' && data.anagramLetters) {
         const anagramDiv = document.getElementById('player-modal-anagram');
         anagramDiv.classList.remove('hidden');
@@ -1478,7 +1462,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     this.answerRevealed = true;
     this.playSound(isCorrect ? 'correct' : 'incorrect');
     
-    // Sumar o restar puntos
     if (isCorrect) {
         this.players[this.currentPlayer].score += this.currentQuestion.points;
     } else if (this.hardMode) {
@@ -1487,16 +1470,15 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
     }
     
-    // Mostrar resultado
     const answerDiv = document.getElementById('modal-answer');
     answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
     answerDiv.classList.add(isCorrect ? 'correct-anim' : 'incorrect-anim');
     document.getElementById('correct-answer-text').textContent = this.currentQuestion.answer;
     
-    // Deshabilitar botones de opciones
     document.querySelectorAll('.host-option-btn').forEach(btn => {
         btn.disabled = true;
         btn.style.opacity = '0.6';
+        btn.style.cursor = 'default';
         if (btn.dataset.option.trim().toLowerCase() === this.currentQuestion.answer.trim().toLowerCase()) {
             btn.style.background = '#d1fae5';
             btn.style.borderColor = '#10b981';
@@ -1509,7 +1491,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
     
     this.currentQuestion.used = true;
     
-    // Broadcast
     this.broadcast({
         type: 'answer-result',
         correct: isCorrect,
@@ -1521,7 +1502,6 @@ div.querySelectorAll('.remove-opt-btn').forEach(btn => {
         selectedOption: selectedOption
     });
     
-    // Siguiente turno
     do {
         this.currentPlayer = (this.currentPlayer + 1) % this.players.length;
     } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
@@ -1599,5 +1579,74 @@ saveAllQuestionsFromDOM() {
     });
     
     console.log('Preguntas guardadas desde DOM:', this.questions);
+}
+
+saveAllQuestionsFromDOM() {
+    // Guardar tipos
+    document.querySelectorAll('.q-type').forEach(select => {
+        const id = parseInt(select.dataset.id);
+        const q = this.questions.find(q => q.id === id);
+        if (q) q.type = select.value;
+    });
+    
+    // Guardar preguntas
+    document.querySelectorAll('.q-input').forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const q = this.questions.find(q => q.id === id);
+        if (q) q.question = input.value.trim();
+    });
+    
+    // Guardar respuestas
+    document.querySelectorAll('.a-input').forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const q = this.questions.find(q => q.id === id);
+        if (q) q.answer = input.value.trim();
+    });
+    
+    // Guardar opciones y actualizar answer para opción múltiple
+    document.querySelectorAll('.options-container').forEach(container => {
+        const qId = parseInt(container.dataset.id);
+        const q = this.questions.find(q => q.id === qId);
+        if (!q) return;
+        
+        const optInputs = container.querySelectorAll('.opt-input');
+        if (optInputs.length > 0) {
+            q.options = [];
+            optInputs.forEach(input => {
+                q.options.push(input.value.trim());
+            });
+            const filled = q.options.filter(o => o);
+            if (filled.length > 0 && q.type === 'options') {
+                q.answer = filled[0];
+            }
+        }
+    });
+    
+    console.log('Preguntas guardadas desde DOM:', this.questions);
+}
+
+sendPlayerAnswerWithOption(chosen, isCorrect) {
+    if (this.isHost || !this.textualMode) return;
+    
+    if (this.connections.length > 0) {
+        this.connections[0].send({ 
+            type: 'player-answer', 
+            answer: chosen,
+            isCorrect: isCorrect 
+        });
+    }
+    
+    document.getElementById('player-answer-status').classList.remove('hidden');
+    document.getElementById('player-answer-status').textContent = '✅ Respuesta enviada. Esperando veredicto del host...';
+    document.getElementById('btn-send-answer').disabled = true;
+    document.getElementById('player-answer-input').disabled = true;
+    
+    document.querySelectorAll('.player-option-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'default';
+    });
+    
+    this.playSound('send');
 }
 }
