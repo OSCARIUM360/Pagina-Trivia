@@ -39,6 +39,7 @@ class JeopardyGame {
     this.originalPlayer = 0;
     this.playerAnswer = null;
     this.availableEmojis = this.getEmojiList();
+    this.selectedQuestionId = null;
     
     // [NUEVO] Tiempos configurables
     this.timerTextSeconds = 25;
@@ -556,6 +557,10 @@ class JeopardyGame {
                 this.players = data.players;
                 this.updateLobby();
                 break;
+
+            case 'question-assigned': // [NUEVO]
+                this.handleQuestionAssigned(data);
+                break;
                 
             case 'game-start':
                 this.loadGameState(data);
@@ -728,45 +733,90 @@ class JeopardyGame {
     const playerIndex = this.players.findIndex(p => p.name === playerName);
     if (playerIndex !== this.currentPlayer) return;
     
-    // [CORREGIDO] Buscar la pregunta por ID correctamente
+    // Buscar la pregunta por ID
     const q = this.questions.find(q => q.id === data.questionId && !q.used);
-    if (q) {
-        // Limpiar selecciones anteriores de todos los jugadores
-        this.broadcast({ type: 'clear-player-selections' });
-        
-        // Notificar al host qué pregunta fue seleccionada
-        this.broadcast({ 
-            type: 'question-assigned', 
-            questionId: q.id, 
-            category: q.category, 
-            points: q.points,
-            playerName: playerName 
-        });
-        
-        // Destacar la celda en el tablero del host
-        this.highlightCell(q);
-    }
+    if (!q) return;
+    
+    console.log('Jugador seleccionó:', q.category, q.points, 'ID:', q.id);
+    
+    // [CORREGIDO] Limpiar selecciones anteriores en TODOS los clientes
+    this.broadcast({ type: 'clear-player-selections' });
+    
+    // [CORREGIDO] Notificar a TODOS qué pregunta fue seleccionada
+    this.broadcast({ 
+        type: 'question-assigned', 
+        questionId: q.id, 
+        category: q.category, 
+        points: q.points,
+        playerName: playerName 
+    });
+    
+    // [CORREGIDO] Destacar la celda en el tablero del host
+    this.highlightCell(q);
 }
     
     highlightCell(q) {
-        const cells = document.querySelectorAll('.game-cell.clickable');
-        cells.forEach(cell => {
-            const points = parseInt(cell.textContent);
-            const row = Math.floor([...cell.parentElement.children].indexOf(cell) / (this.totalCategories + 1));
-            // Buscar la celda correcta
-            if (points === q.points) {
-                const categoryIndex = this.categories.indexOf(q.category);
-                // Verificar que esta celda corresponde a la categoría correcta
-                const board = document.getElementById('game-board');
-                const allCells = board.querySelectorAll('.game-cell.clickable');
-                allCells.forEach(c => {
-                    c.classList.remove('player-selected');
-                });
-                cell.classList.add('player-selected');
-            }
-        });
-        this.showToast('🎯 Jugador seleccionó: ' + q.category + ' - ' + q.points + 'pts');
+    // [CORREGIDO] Buscar la celda correcta por categoría y puntos
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    
+    // Limpiar selecciones anteriores
+    board.querySelectorAll('.game-cell.player-selected').forEach(el => {
+        el.classList.remove('player-selected');
+        el.style.border = '';
+        el.style.boxShadow = '';
+        el.style.transform = '';
+    });
+    
+    // Buscar la celda correcta
+    const cells = board.querySelectorAll('.game-cell.clickable');
+    let foundCell = null;
+    
+    cells.forEach(cell => {
+        const cellCategory = cell.dataset.category;
+        const cellPoints = parseInt(cell.dataset.points);
+        if (cellCategory === q.category && cellPoints === q.points) {
+            foundCell = cell;
+        }
+    });
+    
+    if (foundCell) {
+        // [CORREGIDO] Hacer la selección MUCHO más visible
+        foundCell.classList.add('player-selected');
+        foundCell.style.border = '4px solid #f59e0b';
+        foundCell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
+        foundCell.style.transform = 'scale(1.08)';
+        foundCell.style.zIndex = '10';
+        foundCell.style.position = 'relative';
+        foundCell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+        foundCell.style.color = 'white';
+        foundCell.style.fontWeight = 'bold';
+        foundCell.style.fontSize = '1.1rem';
+        
+        // Agregar un indicador visual adicional
+        const indicator = document.createElement('div');
+        indicator.className = 'selection-indicator';
+        indicator.textContent = '👆';
+        indicator.style.position = 'absolute';
+        indicator.style.top = '-12px';
+        indicator.style.right = '-12px';
+        indicator.style.fontSize = '1.2rem';
+        indicator.style.background = 'white';
+        indicator.style.borderRadius = '50%';
+        indicator.style.padding = '2px';
+        indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+        indicator.style.zIndex = '20';
+        
+        // Remover indicador anterior si existe
+        const oldIndicator = foundCell.querySelector('.selection-indicator');
+        if (oldIndicator) oldIndicator.remove();
+        foundCell.appendChild(indicator);
+        
+        this.showToast('🎯 ' + q.category + ' - ' + q.points + 'pts seleccionada por ' + this.players[this.currentPlayer]?.name);
+    } else {
+        console.log('No se encontró la celda para:', q.category, q.points);
     }
+}
     
     handlePlayerAnswer(conn, data) {
         if (!this.isHost || !this.textualMode || !this.currentQuestion) return;
@@ -1314,7 +1364,7 @@ class JeopardyGame {
         board.appendChild(h);
     });
     
-    // [NUEVO] Para tracking de selección de jugadores
+    // [NUEVO] Para tracking de selección de jugadores - GLOBAL
     let selectedCell = null;
     let selectedQuestionId = null;
     
@@ -1332,6 +1382,20 @@ class JeopardyGame {
             cell.dataset.questionId = q?.id;
             cell.dataset.category = cat;
             cell.dataset.points = (i + 1) * 100;
+            cell.style.position = 'relative'; // Para el indicador
+            
+            // [CORREGIDO] Si la pregunta ya fue seleccionada por un jugador, mostrarla
+            if (q && !q.used && this.selectedQuestionId === q.id) {
+                cell.classList.add('player-selected');
+                cell.style.border = '4px solid #f59e0b';
+                cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8)';
+                cell.style.transform = 'scale(1.08)';
+                cell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+                cell.style.color = 'white';
+                cell.style.fontWeight = 'bold';
+                cell.style.zIndex = '10';
+                cell.style.position = 'relative';
+            }
             
             if (!q?.used) {
                 if (this.isHost) {
@@ -1342,15 +1406,54 @@ class JeopardyGame {
                         if (this.isHost) return;
                         const myIndex = this.players.findIndex(p => p.name === this.playerName);
                         if (myIndex === this.currentPlayer && this.connections.length > 0) {
-                            // Deseleccionar anterior
+                            // [CORREGIDO] Deseleccionar anterior en el cliente
                             if (selectedCell) {
                                 selectedCell.classList.remove('player-selected');
+                                selectedCell.style.border = '';
+                                selectedCell.style.boxShadow = '';
+                                selectedCell.style.transform = '';
+                                selectedCell.style.background = '';
+                                selectedCell.style.color = '';
+                                selectedCell.style.fontWeight = '';
+                                selectedCell.style.zIndex = '';
+                                selectedCell.style.position = '';
+                                // Remover indicador
+                                const oldInd = selectedCell.querySelector('.selection-indicator');
+                                if (oldInd) oldInd.remove();
                             }
-                            // Seleccionar nueva
+                            
+                            // [CORREGIDO] Seleccionar nueva - visualmente MUY visible
                             cell.classList.add('player-selected');
+                            cell.style.border = '4px solid #f59e0b';
+                            cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
+                            cell.style.transform = 'scale(1.1)';
+                            cell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+                            cell.style.color = 'white';
+                            cell.style.fontWeight = 'bold';
+                            cell.style.zIndex = '10';
+                            cell.style.position = 'relative';
+                            
+                            // Agregar indicador visual
+                            const indicator = document.createElement('div');
+                            indicator.className = 'selection-indicator';
+                            indicator.textContent = '👆';
+                            indicator.style.position = 'absolute';
+                            indicator.style.top = '-14px';
+                            indicator.style.right = '-14px';
+                            indicator.style.fontSize = '1.4rem';
+                            indicator.style.background = 'white';
+                            indicator.style.borderRadius = '50%';
+                            indicator.style.padding = '2px 4px';
+                            indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                            indicator.style.zIndex = '20';
+                            const oldInd = cell.querySelector('.selection-indicator');
+                            if (oldInd) oldInd.remove();
+                            cell.appendChild(indicator);
+                            
                             selectedCell = cell;
                             selectedQuestionId = q.id;
                             
+                            // [CORREGIDO] Enviar al host con el ID correcto
                             this.connections[0].send({ 
                                 type: 'player-select-question', 
                                 questionId: q.id 
@@ -1402,6 +1505,10 @@ class JeopardyGame {
     selectQuestion(q) {
     if (!this.isHost || q.used || !this.gameStarted) return;
     console.log('Host seleccionó pregunta:', q.id, q.type);
+    
+    // [NUEVO] Limpiar selección de jugadores al abrir la pregunta
+    this.clearPlayerSelections();
+    this.broadcast({ type: 'clear-player-selections' });
     
     this.playSound('select');
     this.currentQuestion = q;
@@ -1485,7 +1592,6 @@ class JeopardyGame {
     
     document.getElementById('question-modal').classList.add('active');
     
-    // [CORREGIDO] Mostrar respuesta correcta al host SIEMPRE
     const answerDiv = document.getElementById('modal-answer');
     answerDiv.classList.remove('hidden');
     answerDiv.className = 'answer-reveal';
@@ -1634,15 +1740,63 @@ class JeopardyGame {
     }
 }
 
-    handleQuestionAssigned(data) {
-        // El host notifica qué pregunta fue seleccionada por el jugador
-        const q = this.questions.find(q => q.id === data.questionId);
-        if (q && this.isHost) {
-            // Destacar en el tablero
-            const cells = document.querySelectorAll('.game-cell.clickable');
-            cells.forEach(c => c.classList.remove('player-selected'));
+    // [NUEVO] Manejar asignación de pregunta para jugadores
+handleQuestionAssigned(data) {
+    // Limpiar selecciones anteriores
+    this.clearPlayerSelections();
+    
+    // Guardar la pregunta seleccionada
+    this.selectedQuestionId = data.questionId;
+    
+    // Buscar y resaltar la celda en el tablero del jugador
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    
+    const cells = board.querySelectorAll('.game-cell.clickable');
+    let foundCell = null;
+    
+    cells.forEach(cell => {
+        const cellCategory = cell.dataset.category;
+        const cellPoints = parseInt(cell.dataset.points);
+        const cellId = parseInt(cell.dataset.questionId);
+        if (cellId === data.questionId) {
+            foundCell = cell;
         }
+    });
+    
+    if (foundCell) {
+        // [CORREGIDO] Hacer la selección MUCHO más visible para el jugador
+        foundCell.classList.add('player-selected');
+        foundCell.style.border = '4px solid #f59e0b';
+        foundCell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
+        foundCell.style.transform = 'scale(1.1)';
+        foundCell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+        foundCell.style.color = 'white';
+        foundCell.style.fontWeight = 'bold';
+        foundCell.style.zIndex = '10';
+        foundCell.style.position = 'relative';
+        
+        // Agregar indicador visual
+        const indicator = document.createElement('div');
+        indicator.className = 'selection-indicator';
+        indicator.textContent = '👆';
+        indicator.style.position = 'absolute';
+        indicator.style.top = '-14px';
+        indicator.style.right = '-14px';
+        indicator.style.fontSize = '1.4rem';
+        indicator.style.background = 'white';
+        indicator.style.borderRadius = '50%';
+        indicator.style.padding = '2px 4px';
+        indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        indicator.style.zIndex = '20';
+        const oldInd = foundCell.querySelector('.selection-indicator');
+        if (oldInd) oldInd.remove();
+        foundCell.appendChild(indicator);
     }
+    
+    // Mostrar toast con la selección
+    this.showToast('🎯 ' + data.playerName + ' seleccionó: ' + data.category + ' - ' + data.points + 'pts');
+}
 
     showPlayerAnswerModal(data) {
     document.getElementById('player-modal-category').textContent = `${data.category} — ${data.points} pts`;
@@ -2616,8 +2770,23 @@ updatePlayerTimer(seconds, isWarning) {
 
 // [NUEVO] Limpiar selecciones de jugadores
 clearPlayerSelections() {
+    // [CORREGIDO] Limpiar TODAS las selecciones visuales
     document.querySelectorAll('.game-cell.player-selected').forEach(el => {
         el.classList.remove('player-selected');
+        el.style.border = '';
+        el.style.boxShadow = '';
+        el.style.transform = '';
+        el.style.background = '';
+        el.style.color = '';
+        el.style.fontWeight = '';
+        el.style.zIndex = '';
+        el.style.position = '';
+        // Remover indicador
+        const indicator = el.querySelector('.selection-indicator');
+        if (indicator) indicator.remove();
     });
+    
+    // Limpiar referencia global
+    this.selectedQuestionId = null;
 }
 }
