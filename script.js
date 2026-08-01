@@ -4,6 +4,47 @@ document.addEventListener('DOMContentLoaded', function() {
     window.game = new JeopardyGame(roomFromQR);
 });
 
+const APP_VERSION = '1.0.0';
+const VERSION_HISTORY = {
+    '1.0.0': 'Versión inicial',
+    '1.0.1': 'Corrección de selección de preguntas en modo textual',
+    '1.0.2': 'Mejora visual de selección de preguntas',
+    '1.0.3': 'Sincronización de selección entre host y jugadores',
+    '1.0.4': 'Timer visible para jugadores',
+    '1.0.5': 'Corrección de penalización en modo difícil con timer',
+    '1.0.6': 'Mejora visual de selección para host'
+};
+
+// [NUEVO] Función para actualizar la versión
+function updateVersionDisplay() {
+    const versionEl = document.getElementById('version-display');
+    if (versionEl) {
+        versionEl.textContent = 'v' + APP_VERSION;
+        // Agregar tooltip con historial
+        versionEl.title = 'Historial de versiones:\n' + 
+            Object.entries(VERSION_HISTORY).map(([v, desc]) => `v${v}: ${desc}`).join('\n');
+    }
+}
+
+// [NUEVO] Función para incrementar versión (para desarrollo)
+function incrementVersion() {
+    const parts = APP_VERSION.split('.').map(Number);
+    let major = parts[0];
+    let minor = parts[1];
+    let patch = parts[2] + 1;
+    
+    if (patch >= 10) {
+        patch = 0;
+        minor++;
+    }
+    if (minor >= 10) {
+        minor = 0;
+        major++;
+    }
+    
+    return `${major}.${minor}.${patch}`;
+}
+
 class JeopardyGame {
     constructor(roomFromQR) {
     this.categories = [];
@@ -40,6 +81,7 @@ class JeopardyGame {
     this.playerAnswer = null;
     this.availableEmojis = this.getEmojiList();
     this.selectedQuestionId = null;
+    this.selectedQuestionData = null;
     
     // [NUEVO] Tiempos configurables
     this.timerTextSeconds = 25;
@@ -739,6 +781,10 @@ class JeopardyGame {
     
     console.log('Jugador seleccionó:', q.category, q.points, 'ID:', q.id);
     
+    // [CORREGIDO] Guardar la pregunta seleccionada globalmente
+    this.selectedQuestionId = q.id;
+    this.selectedQuestionData = q;
+    
     // [CORREGIDO] Limpiar selecciones anteriores en TODOS los clientes
     this.broadcast({ type: 'clear-player-selections' });
     
@@ -751,8 +797,11 @@ class JeopardyGame {
         playerName: playerName 
     });
     
-    // [CORREGIDO] Destacar la celda en el tablero del host
+    // [CORREGIDO] Destacar la celda en el tablero del host (Y EN TODOS)
     this.highlightCell(q);
+    
+    // [NUEVO] Forzar actualización del tablero del host
+    this.renderBoard();
 }
     
     highlightCell(q) {
@@ -766,6 +815,14 @@ class JeopardyGame {
         el.style.border = '';
         el.style.boxShadow = '';
         el.style.transform = '';
+        el.style.background = '';
+        el.style.color = '';
+        el.style.fontWeight = '';
+        el.style.zIndex = '';
+        el.style.position = '';
+        // Remover indicador
+        const indicator = el.querySelector('.selection-indicator');
+        if (indicator) indicator.remove();
     });
     
     // Buscar la celda correcta
@@ -781,11 +838,11 @@ class JeopardyGame {
     });
     
     if (foundCell) {
-        // [CORREGIDO] Hacer la selección MUCHO más visible
+        // [CORREGIDO] Hacer la selección MUCHO más visible para HOST también
         foundCell.classList.add('player-selected');
         foundCell.style.border = '4px solid #f59e0b';
         foundCell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
-        foundCell.style.transform = 'scale(1.08)';
+        foundCell.style.transform = 'scale(1.1)';
         foundCell.style.zIndex = '10';
         foundCell.style.position = 'relative';
         foundCell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
@@ -811,6 +868,9 @@ class JeopardyGame {
         const oldIndicator = foundCell.querySelector('.selection-indicator');
         if (oldIndicator) oldIndicator.remove();
         foundCell.appendChild(indicator);
+        
+        // [NUEVO] Hacer la celda más grande temporalmente
+        foundCell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
         
         this.showToast('🎯 ' + q.category + ' - ' + q.points + 'pts seleccionada por ' + this.players[this.currentPlayer]?.name);
     } else {
@@ -1382,31 +1442,49 @@ class JeopardyGame {
             cell.dataset.questionId = q?.id;
             cell.dataset.category = cat;
             cell.dataset.points = (i + 1) * 100;
-            cell.style.position = 'relative'; // Para el indicador
+            cell.style.position = 'relative';
             
-            // [CORREGIDO] Si la pregunta ya fue seleccionada por un jugador, mostrarla
+            // [CORREGIDO] Si la pregunta ya fue seleccionada por un jugador, mostrarla (también para host)
             if (q && !q.used && this.selectedQuestionId === q.id) {
                 cell.classList.add('player-selected');
                 cell.style.border = '4px solid #f59e0b';
-                cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8)';
-                cell.style.transform = 'scale(1.08)';
+                cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
+                cell.style.transform = 'scale(1.1)';
                 cell.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
                 cell.style.color = 'white';
                 cell.style.fontWeight = 'bold';
                 cell.style.zIndex = '10';
                 cell.style.position = 'relative';
+                cell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
+                
+                // Agregar indicador para host también
+                const indicator = document.createElement('div');
+                indicator.className = 'selection-indicator';
+                indicator.textContent = '👆';
+                indicator.style.position = 'absolute';
+                indicator.style.top = '-14px';
+                indicator.style.right = '-14px';
+                indicator.style.fontSize = '1.4rem';
+                indicator.style.background = 'white';
+                indicator.style.borderRadius = '50%';
+                indicator.style.padding = '2px 4px';
+                indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                indicator.style.zIndex = '20';
+                const oldInd = cell.querySelector('.selection-indicator');
+                if (oldInd) oldInd.remove();
+                cell.appendChild(indicator);
             }
             
             if (!q?.used) {
                 if (this.isHost) {
                     cell.addEventListener('click', () => this.selectQuestion(q));
                 } else if (this.textualMode) {
-                    // [CORREGIDO] Selección para jugadores - solo una a la vez
+                    // Selección para jugadores
                     cell.addEventListener('click', () => {
                         if (this.isHost) return;
                         const myIndex = this.players.findIndex(p => p.name === this.playerName);
                         if (myIndex === this.currentPlayer && this.connections.length > 0) {
-                            // [CORREGIDO] Deseleccionar anterior en el cliente
+                            // Deseleccionar anterior en el cliente
                             if (selectedCell) {
                                 selectedCell.classList.remove('player-selected');
                                 selectedCell.style.border = '';
@@ -1417,12 +1495,13 @@ class JeopardyGame {
                                 selectedCell.style.fontWeight = '';
                                 selectedCell.style.zIndex = '';
                                 selectedCell.style.position = '';
+                                selectedCell.style.animation = '';
                                 // Remover indicador
                                 const oldInd = selectedCell.querySelector('.selection-indicator');
                                 if (oldInd) oldInd.remove();
                             }
                             
-                            // [CORREGIDO] Seleccionar nueva - visualmente MUY visible
+                            // Seleccionar nueva - visualmente MUY visible
                             cell.classList.add('player-selected');
                             cell.style.border = '4px solid #f59e0b';
                             cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
@@ -1432,6 +1511,7 @@ class JeopardyGame {
                             cell.style.fontWeight = 'bold';
                             cell.style.zIndex = '10';
                             cell.style.position = 'relative';
+                            cell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
                             
                             // Agregar indicador visual
                             const indicator = document.createElement('div');
@@ -1453,7 +1533,7 @@ class JeopardyGame {
                             selectedCell = cell;
                             selectedQuestionId = q.id;
                             
-                            // [CORREGIDO] Enviar al host con el ID correcto
+                            // Enviar al host con el ID correcto
                             this.connections[0].send({ 
                                 type: 'player-select-question', 
                                 questionId: q.id 
@@ -1741,6 +1821,7 @@ class JeopardyGame {
 }
 
     // [NUEVO] Manejar asignación de pregunta para jugadores
+// [NUEVO] Manejar asignación de pregunta para jugadores
 handleQuestionAssigned(data) {
     // Limpiar selecciones anteriores
     this.clearPlayerSelections();
@@ -1775,6 +1856,7 @@ handleQuestionAssigned(data) {
         foundCell.style.fontWeight = 'bold';
         foundCell.style.zIndex = '10';
         foundCell.style.position = 'relative';
+        foundCell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
         
         // Agregar indicador visual
         const indicator = document.createElement('div');
@@ -2789,4 +2871,17 @@ clearPlayerSelections() {
     // Limpiar referencia global
     this.selectedQuestionId = null;
 }
+
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // ... código existente ...
+    updateVersionDisplay();
+    
+    // Log de versión en consola
+    console.log(`📦 Jeopardy Trivia v${APP_VERSION}`);
+    console.log('📝 Historial de cambios:');
+    Object.entries(VERSION_HISTORY).forEach(([v, desc]) => {
+        console.log(`  v${v}: ${desc}`);
+    });
+});
