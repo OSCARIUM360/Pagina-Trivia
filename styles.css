@@ -670,3 +670,45 @@ input:checked + .slider:before { transform: translateX(22px); }
 .name-length-hint.warning {
     color: #ef4444;
 }
+
+/* [NUEVO] Estilos para selección de jugadores - MUY VISIBLE */
+.game-cell.player-selected {
+    animation: selectedPulse 0.8s ease-in-out infinite;
+    border: 4px solid #f59e0b !important;
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3) !important;
+    transform: scale(1.08);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: white !important;
+    font-weight: bold !important;
+    z-index: 10;
+    position: relative;
+}
+
+@keyframes selectedPulse {
+    0%, 100% { 
+        box-shadow: 0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3);
+        transform: scale(1.08);
+    }
+    50% { 
+        box-shadow: 0 0 50px rgba(245, 158, 11, 1), inset 0 0 30px rgba(245, 158, 11, 0.5);
+        transform: scale(1.12);
+    }
+}
+
+.selection-indicator {
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    font-size: 1.4rem;
+    background: white;
+    border-radius: 50%;
+    padding: 2px 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 20;
+    animation: bounceIndicator 1s ease-in-out infinite;
+}
+
+@keyframes bounceIndicator {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
