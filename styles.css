@@ -712,3 +712,52 @@ input:checked + .slider:before { transform: translateX(22px); }
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-5px); }
 }
+
+/* [NUEVO] Estilos para el display de versión */
+#version-display {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.5;
+    font-family: 'Courier New', monospace;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+    cursor: default;
+    user-select: none;
+    background: var(--surface);
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+#version-display:hover {
+    opacity: 1;
+}
+
+/* Tooltip para la versión */
+#version-display::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    white-space: pre-line;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-weight: 400;
+    width: max-content;
+    max-width: 300px;
+}
+
+#version-display:hover::after {
+    opacity: 1;
+}
