@@ -761,3 +761,143 @@ input:checked + .slider:before { transform: translateX(22px); }
 #version-display:hover::after {
     opacity: 1;
 }
+
+/* Pistas para "Quién soy" */
+.pistas-container {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.pistas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pista-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pista-input-row input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+
+.pista-btn {
+    padding: 12px 20px;
+    background: #f1f5f9;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: left;
+    font-weight: 500;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.pista-btn:hover:not(:disabled) {
+    background: #eef2ff;
+    border-color: var(--primary);
+    transform: scale(1.02);
+}
+
+.pista-btn:disabled {
+    cursor: default;
+    opacity: 0.9;
+    background: #d1fae5;
+    border-color: #10b981;
+}
+
+/* Verdadero/Falso */
+#modal-truefalse {
+    margin: 16px 0;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.tf-btn {
+    padding: 14px 24px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    min-width: 120px;
+}
+
+.tf-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+}
+
+.true-btn {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.true-btn:hover:not(:disabled) {
+    background: #a7f3d0;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+}
+
+.false-btn {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #991b1b;
+}
+
+.false-btn:hover:not(:disabled) {
+    background: #fecaca;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+}
+
+.tf-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+/* Valor de pregunta */
+.valor-pregunta-display {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--warning);
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #fef3c7;
+    border-radius: 8px;
+    border: 1px solid #f59e0b;
+    display: inline-block;
+}
+
+/* Timer Display */
+.timer-display {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    display: inline-block;
+    min-width: 80px;
+    transition: all 0.3s;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
