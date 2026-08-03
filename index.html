@@ -136,7 +136,15 @@
         <div id="questions-screen" class="screen">
             <h2><i class="fas fa-question-circle"></i> Preguntas y Respuestas</h2>
             <p class="hint">Escribe las preguntas y respuestas para cada categoría</p>
-            <div id="questions-container"></div>
+            <div id="questions-container">
+                <select class="q-type" data-id="${id}">
+                    <option value="text" ${q.type === 'text' ? 'selected' : ''}>📝 Texto</option>
+                    <option value="options" ${q.type === 'options' ? 'selected' : ''}>🔤 Opción múltiple</option>
+                    <option value="anagram" ${q.type === 'anagram' ? 'selected' : ''}>🔀 Anagrama</option>
+                    <option value="whoami" ${q.type === 'whoami' ? 'selected' : ''}>🕵️ ¿Quién soy?</option>
+                    <option value="truefalse" ${q.type === 'truefalse' ? 'selected' : ''}>✅ Verdadero/Falso</option>
+                </select>
+            </div>
             <div class="actions">
                 <button id="back-to-categories" class="btn btn-text"><i class="fas fa-arrow-left"></i> Volver</button>
                 <button id="export-trivia" class="btn btn-secondary"><i class="fas fa-copy"></i> Copiar Código de Trivia</button>
@@ -252,6 +260,10 @@
                 <div id="modal-question" class="question-display"></div>
                 <div id="modal-options" class="options-display hidden"></div>
                 <div id="modal-anagram" class="anagram-display hidden"></div>
+                <!-- Después de modal-anagram -->
+                <div id="modal-pistas" class="pistas-container hidden"></div>
+                <div id="modal-truefalse" class="hidden"></div>
+                <div id="modal-valor-pregunta" class="valor-pregunta-display hidden"></div>
                 <div id="modal-turn-indicator" class="turn-indicator-modal"></div>
                 <div id="answer-buttons" class="modal-actions">
                     <button id="btn-correct" class="btn btn-success btn-lg"><i class="fas fa-check-circle"></i> <span id="btn-correct-text">Correcto</span></button>
@@ -278,6 +290,9 @@
                 <p id="player-modal-question" class="question-display"></p>
                 <div id="player-modal-options" class="options-display hidden"></div>
                 <div id="player-modal-anagram" class="anagram-display hidden"></div>
+                <!-- Después de player-modal-anagram -->
+                <div id="player-modal-pistas" class="pistas-container hidden"></div>
+                <div id="player-modal-valor" class="valor-pregunta-display hidden"></div>
                 <div class="input-group">
                     <label>Escribe tu respuesta:</label>
                     <input type="text" id="player-answer-input" placeholder="Tu respuesta..." autocomplete="off">
