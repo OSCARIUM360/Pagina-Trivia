@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.game = new JeopardyGame(roomFromQR);
 });
 
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 const VERSION_HISTORY = {
     '1.0.0': 'Versión inicial',
     '1.0.1': 'Corrección de selección de preguntas en modo textual',
@@ -12,21 +12,19 @@ const VERSION_HISTORY = {
     '1.0.3': 'Sincronización de selección entre host y jugadores',
     '1.0.4': 'Timer visible para jugadores',
     '1.0.5': 'Corrección de penalización en modo difícil con timer',
-    '1.0.6': 'Mejora visual de selección para host'
+    '1.0.7': 'Mejora visual para host',
+    '1.0.7': 'Nuevos tipos de pregunta: ¿Quién soy? y Verdadero/Falso'
 };
 
-// [NUEVO] Función para actualizar la versión
 function updateVersionDisplay() {
     const versionEl = document.getElementById('version-display');
     if (versionEl) {
         versionEl.textContent = 'v' + APP_VERSION;
-        // Agregar tooltip con historial
         versionEl.title = 'Historial de versiones:\n' + 
             Object.entries(VERSION_HISTORY).map(([v, desc]) => `v${v}: ${desc}`).join('\n');
     }
 }
 
-// [NUEVO] Función para incrementar versión (para desarrollo)
 function incrementVersion() {
     const parts = APP_VERSION.split('.').map(Number);
     let major = parts[0];
@@ -3385,7 +3383,11 @@ handlePistaRevelada(data) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // ... código existente ...
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromQR = urlParams.get('room');
+    window.game = new JeopardyGame(roomFromQR);
+    
+    // Mostrar versión
     updateVersionDisplay();
     
     // Log de versión en consola
