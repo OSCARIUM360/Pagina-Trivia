@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.game = new JeopardyGame(roomFromQR);
 });
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.6';
 const VERSION_HISTORY = {
     '1.0.0': 'Versión inicial',
     '1.0.1': 'Corrección de selección de preguntas en modo textual',
@@ -80,13 +80,14 @@ class JeopardyGame {
     this.originalPlayer = 0;
     this.playerAnswer = null;
     this.availableEmojis = this.getEmojiList();
-    this.selectedQuestionId = null;
-    this.selectedQuestionData = null;
-    
-    // [NUEVO] Tiempos configurables
     this.timerTextSeconds = 25;
     this.timerOptionsSeconds = 15;
     this.timerAnagramSeconds = 20;
+    this.selectedQuestionId = null;
+    this.selectedQuestionData = null;
+    this.pistasReveladas = 0;
+    this.pistasReveladasSet = new Set();
+    this.valorPregunta = 1;
 
     this.setupMusic();
     this.musicStarted = false;
@@ -599,10 +600,6 @@ class JeopardyGame {
                 this.players = data.players;
                 this.updateLobby();
                 break;
-
-            case 'question-assigned': // [NUEVO]
-                this.handleQuestionAssigned(data);
-                break;
                 
             case 'game-start':
                 this.loadGameState(data);
@@ -613,13 +610,6 @@ class JeopardyGame {
                 
             case 'game-update':
                 this.applyGameUpdate(data);
-                break;
-                case 'timer-stopped':
-                // Ocultar timer para los jugadores
-                const playerTimerEl = document.getElementById('player-modal-timer');
-                if (playerTimerEl) {
-                    playerTimerEl.style.display = 'none';
-                }
                 break;
                 
             case 'question-selected':
@@ -648,8 +638,23 @@ class JeopardyGame {
                 this.updatePlayerTimer(data.seconds, data.isWarning);
                 break;
                 
+            case 'timer-stopped':
+                const playerTimerEl = document.getElementById('player-modal-timer');
+                if (playerTimerEl) {
+                    playerTimerEl.style.display = 'none';
+                }
+                break;
+                
             case 'clear-player-selections':
                 this.clearPlayerSelections();
+                break;
+                
+            case 'question-assigned':
+                this.handleQuestionAssigned(data);
+                break;
+                
+            case 'pista-revelada':
+                this.handlePistaRevelada(data);
                 break;
                 
             case 'close-modal':
@@ -671,7 +676,10 @@ class JeopardyGame {
                                 type: data.questionType,
                                 options: data.questionOptions,
                                 anagramLetters: data.questionAnagram,
-                                correctAnswer: data.correctAnswer
+                                correctAnswer: data.correctAnswer,
+                                pistas: data.pistas || [],
+                                pistasReveladas: data.pistasReveladas || 0,
+                                valorPregunta: data.valorPregunta || 1
                             });
                         }, 300);
                     }
@@ -699,11 +707,11 @@ class JeopardyGame {
             this.handleLeaveRequest(conn, data);
         } else if (data.type === 'player-select-question') {
             this.handlePlayerSelectQuestion(conn, data);
+        } else if (data.type === 'revelar-pista') {
+            this.handleRevelarPista(conn, data);
         } else if (data.type === 'player-answer') {
-            // [NUEVO] Detener timer cuando el jugador envía respuesta
             if (this.timerEnabled) {
                 this.stopTimer();
-                // Notificar a los jugadores que el timer se detuvo
                 this.broadcast({
                     type: 'timer-stopped'
                 });
@@ -1012,7 +1020,8 @@ class JeopardyGame {
                 answer: '', 
                 used: false, 
                 type: 'text', 
-                options: ['', ''] 
+                options: ['', ''],
+                pistas: ['', '', '']
             };
             q.id = id;
             if (!q.options || !Array.isArray(q.options)) {
@@ -1020,6 +1029,12 @@ class JeopardyGame {
             }
             while (q.options.length < 2) q.options.push('');
             if (q.options.length > 4) q.options = q.options.slice(0, 4);
+            
+            if (!q.pistas || !Array.isArray(q.pistas)) {
+                q.pistas = ['', '', ''];
+            }
+            while (q.pistas.length < 3) q.pistas.push('');
+            if (q.pistas.length > 3) q.pistas = q.pistas.slice(0, 3);
             
             this.questions.push(q);
             
@@ -1029,6 +1044,8 @@ class JeopardyGame {
             
             const isAnagram = q.type === 'anagram';
             const isOptions = q.type === 'options';
+            const isWhoami = q.type === 'whoami';
+            const isTruefalse = q.type === 'truefalse';
             
             div.innerHTML = `
                 <h3>${cat} — ${q.points} pts</h3>
@@ -1037,11 +1054,13 @@ class JeopardyGame {
                         <option value="text" ${q.type === 'text' ? 'selected' : ''}>📝 Texto</option>
                         <option value="options" ${q.type === 'options' ? 'selected' : ''}>🔤 Opción múltiple</option>
                         <option value="anagram" ${q.type === 'anagram' ? 'selected' : ''}>🔀 Anagrama</option>
+                        <option value="whoami" ${q.type === 'whoami' ? 'selected' : ''}>🕵️ ¿Quién soy?</option>
+                        <option value="truefalse" ${q.type === 'truefalse' ? 'selected' : ''}>✅ Verdadero/Falso</option>
                     </select>
                 </div>
                 <div class="question-inputs">
-                    <textarea class="q-input" placeholder="Escribe la pregunta aquí" data-id="${id}" style="${isAnagram ? 'display:none;' : ''}">${q.question || ''}</textarea>
-                    <textarea class="a-input" placeholder="${isAnagram ? 'Palabra para anagrama' : isOptions ? 'Respuesta correcta (primera opción)' : 'Escribe la respuesta correcta'}" data-id="${id}" style="${isOptions ? 'display:none;' : ''}">${q.answer || ''}</textarea>
+                    <textarea class="q-input" placeholder="${isWhoami ? 'Escribe la descripción o contexto' : isTruefalse ? 'Escribe la afirmación' : 'Escribe la pregunta aquí'}" data-id="${id}" style="${isAnagram ? 'display:none;' : ''}">${q.question || ''}</textarea>
+                    <textarea class="a-input" placeholder="${isWhoami ? 'Respuesta correcta (nombre/personaje)' : isTruefalse ? 'Respuesta (verdadero/falso)' : isAnagram ? 'Palabra para anagrama' : isOptions ? 'Respuesta correcta (primera opción)' : 'Escribe la respuesta correcta'}" data-id="${id}" style="${isOptions ? 'display:none;' : ''}">${q.answer || ''}</textarea>
                 </div>
                 <div class="options-container" data-id="${id}" style="${isOptions ? '' : 'display:none;'}">
                     <div class="options-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -1059,12 +1078,27 @@ class JeopardyGame {
                             </div>
                         `).join('')}
                     </div>
-                </div>`;
+                </div>
+                <div class="whoami-container" data-id="${id}" style="${isWhoami ? '' : 'display:none;'}">
+                    <div class="pistas-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <p class="hint" style="margin:0;">🕵️ Pistas (3) - El jugador puede revelarlas</p>
+                    </div>
+                    <div class="pistas-list">
+                        ${(q.pistas || []).map((pista, pi) => `
+                            <div class="pista-input-row">
+                                <span style="font-weight:600;width:30px;color:var(--text-secondary);">Pista ${pi + 1}:</span>
+                                <input type="text" class="pista-input" placeholder="Escribe la pista ${pi + 1}" value="${pista || ''}" data-qid="${id}" data-pidx="${pi}">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
             container.appendChild(div);
             
             setTimeout(() => {
                 const typeSelect = div.querySelector('.q-type');
                 const optionsContainer = div.querySelector('.options-container');
+                const whoamiContainer = div.querySelector('.whoami-container');
                 const qInput = div.querySelector('.q-input');
                 const aInput = div.querySelector('.a-input');
                 
@@ -1075,14 +1109,27 @@ class JeopardyGame {
                         
                         const isAnagramNow = typeSelect.value === 'anagram';
                         const isOptionsNow = typeSelect.value === 'options';
+                        const isWhoamiNow = typeSelect.value === 'whoami';
+                        const isTruefalseNow = typeSelect.value === 'truefalse';
                         
-                        if (qInput) qInput.style.display = isAnagramNow ? 'none' : '';
+                        if (qInput) {
+                            qInput.style.display = isAnagramNow ? 'none' : '';
+                            qInput.placeholder = isWhoamiNow ? 'Escribe la descripción o contexto' : 
+                                                  isTruefalseNow ? 'Escribe la afirmación' : 
+                                                  'Escribe la pregunta aquí';
+                        }
                         if (aInput) {
                             aInput.style.display = isOptionsNow ? 'none' : '';
-                            aInput.placeholder = isAnagramNow ? 'Palabra para anagrama' : 'Escribe la respuesta correcta';
+                            aInput.placeholder = isWhoamiNow ? 'Respuesta correcta (nombre/personaje)' :
+                                                  isTruefalseNow ? 'Respuesta (verdadero/falso)' :
+                                                  isAnagramNow ? 'Palabra para anagrama' : 
+                                                  'Escribe la respuesta correcta';
                         }
                         if (optionsContainer) {
                             optionsContainer.style.display = isOptionsNow ? '' : 'none';
+                        }
+                        if (whoamiContainer) {
+                            whoamiContainer.style.display = isWhoamiNow ? '' : 'none';
                         }
                         
                         if (isOptionsNow && qObj) {
@@ -1131,6 +1178,17 @@ class JeopardyGame {
                         const qObj = this.questions.find(q => q.id === qId2);
                         if (qObj && qObj.options) {
                             qObj.options[oIdx] = input.value.trim();
+                        }
+                    });
+                });
+                
+                div.querySelectorAll('.pista-input').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const qId2 = parseInt(input.dataset.qid);
+                        const pIdx = parseInt(input.dataset.pidx);
+                        const qObj = this.questions.find(q => q.id === qId2);
+                        if (qObj && qObj.pistas) {
+                            qObj.pistas[pIdx] = input.value.trim();
                         }
                     });
                 });
@@ -1212,7 +1270,7 @@ class JeopardyGame {
     
     let valid = true;
     for (const q of this.questions) {
-        console.log('Submit - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options);
+        console.log('Submit - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options, 'pistas:', q.pistas);
         
         if (q.type === 'anagram') {
             if (!q.answer || !q.answer.trim()) {
@@ -1231,7 +1289,31 @@ class JeopardyGame {
                 valid = false; break;
             }
             q.answer = filled[0];
-            console.log('Answer establecida a:', q.answer);
+        } else if (q.type === 'whoami') {
+            if (!q.question || !q.question.trim()) {
+                alert(`Falta la descripción/contexto: ${q.category} ${q.points}pts`);
+                valid = false; break;
+            }
+            if (!q.answer || !q.answer.trim()) {
+                alert(`Falta la respuesta correcta: ${q.category} ${q.points}pts`);
+                valid = false; break;
+            }
+            const pistasFilled = (q.pistas || []).filter(p => p && p.trim());
+            if (pistasFilled.length < 3) {
+                alert(`Faltan pistas (necesitas 3): ${q.category} ${q.points}pts (tienes ${pistasFilled.length})`);
+                valid = false; break;
+            }
+        } else if (q.type === 'truefalse') {
+            if (!q.question || !q.question.trim()) {
+                alert(`Falta la afirmación: ${q.category} ${q.points}pts`);
+                valid = false; break;
+            }
+            const answerLower = q.answer?.trim().toLowerCase();
+            if (!q.answer || !q.answer.trim() || (answerLower !== 'verdadero' && answerLower !== 'falso' && answerLower !== 'true' && answerLower !== 'false')) {
+                alert(`La respuesta debe ser "verdadero" o "falso": ${q.category} ${q.points}pts`);
+                valid = false; break;
+            }
+            q.answer = answerLower === 'verdadero' || answerLower === 'true' ? 'Verdadero' : 'Falso';
         } else {
             if (!q.question || !q.question.trim()) {
                 alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
@@ -1259,7 +1341,7 @@ class JeopardyGame {
     if (this.questions.length === 0) return alert('Primero crea las preguntas');
     
     for (const q of this.questions) {
-        console.log('Export - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options);
+        console.log('Export - Validando:', q.id, q.type, 'q:', q.question, 'a:', q.answer, 'opts:', q.options, 'pistas:', q.pistas);
         
         if (q.type === 'anagram') {
             if (!q.answer || !q.answer.trim()) {
@@ -1274,6 +1356,26 @@ class JeopardyGame {
                 return alert(`Faltan opciones (mínimo 2): ${q.category} ${q.points}pts`);
             }
             q.answer = filledOpts[0];
+        } else if (q.type === 'whoami') {
+            if (!q.question || !q.question.trim()) {
+                return alert(`Falta la descripción/contexto: ${q.category} ${q.points}pts`);
+            }
+            if (!q.answer || !q.answer.trim()) {
+                return alert(`Falta la respuesta correcta: ${q.category} ${q.points}pts`);
+            }
+            const pistasFilled = (q.pistas || []).filter(p => p && p.trim());
+            if (pistasFilled.length < 3) {
+                return alert(`Faltan pistas (necesitas 3): ${q.category} ${q.points}pts`);
+            }
+        } else if (q.type === 'truefalse') {
+            if (!q.question || !q.question.trim()) {
+                return alert(`Falta la afirmación: ${q.category} ${q.points}pts`);
+            }
+            const answerLower = q.answer?.trim().toLowerCase();
+            if (!q.answer || !q.answer.trim() || (answerLower !== 'verdadero' && answerLower !== 'falso' && answerLower !== 'true' && answerLower !== 'false')) {
+                return alert(`La respuesta debe ser "verdadero" o "falso": ${q.category} ${q.points}pts`);
+            }
+            q.answer = answerLower === 'verdadero' || answerLower === 'true' ? 'Verdadero' : 'Falso';
         } else {
             if (!q.question || !q.question.trim()) {
                 return alert(`Falta la pregunta: ${q.category} ${q.points}pts`);
@@ -1294,7 +1396,8 @@ class JeopardyGame {
             q: q.question,
             a: q.answer,
             t: q.type || 'text',
-            opts: (q.options || []).filter(o => o && o.trim())
+            opts: (q.options || []).filter(o => o && o.trim()),
+            pistas: (q.pistas || []).filter(p => p && p.trim())
         }))
     };
     
@@ -1307,21 +1410,47 @@ class JeopardyGame {
 }
 
     importTrivia() {
-        const codeInput = document.getElementById('trivia-code-input'); const code = codeInput.value.trim();
-        if (!code) return alert('Pega el código'); if (!code.startsWith('JPTV')) return alert('Código inválido');
-        try {
-            const jsonStr = decodeURIComponent(escape(atob(code.substring(4)))); const data = JSON.parse(jsonStr);
-            const categories = data.c || data.categories; const qpc = data.qpc || data.questionsPerCategory;
-            const questions = data.q.map(q => ({ category: q.cat || q.category, points: q.pts || q.points, question: q.q || q.question, answer: q.a || q.answer, type: q.t || 'text', options: q.opts || q.options || [] }));
-            this.clearState(); this.isHost = true; this.categories = categories; this.totalCategories = categories.length; this.questionsPerCategory = qpc;
-            this.questions = questions.map((q, i) => ({ id: i, ...q, used: false }));
-            this.roomCode = this.generateRoomCode(); this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true, emoji: '👑' }];
-            this.joinedNames = new Set(['Host']); this.gameStarted = false;
-            document.getElementById('load-trivia-form').classList.add('hidden'); codeInput.value = '';
-            this.initPeer(this.roomCode + '-host'); this.showLobby(); this.saveState();
-            this.showToast('✅ Trivia cargada! ' + this.totalCategories + ' categorías');
-        } catch (e) { alert('Error al cargar.'); }
-    }
+    const codeInput = document.getElementById('trivia-code-input'); 
+    const code = codeInput.value.trim();
+    if (!code) return alert('Pega el código'); 
+    if (!code.startsWith('JPTV')) return alert('Código inválido');
+    try {
+        const jsonStr = decodeURIComponent(escape(atob(code.substring(4)))); 
+        const data = JSON.parse(jsonStr);
+        const categories = data.c || data.categories; 
+        const qpc = data.qpc || data.questionsPerCategory;
+        const questions = data.q.map(q => ({ 
+            category: q.cat || q.category, 
+            points: q.pts || q.points, 
+            question: q.q || q.question, 
+            answer: q.a || q.answer, 
+            type: q.t || 'text', 
+            options: q.opts || q.options || [],
+            pistas: q.pistas || []
+        }));
+        this.clearState(); 
+        this.isHost = true; 
+        this.categories = categories; 
+        this.totalCategories = categories.length; 
+        this.questionsPerCategory = qpc;
+        this.questions = questions.map((q, i) => ({ 
+            id: i, 
+            ...q, 
+            used: false,
+            pistas: q.pistas || ['', '', '']
+        }));
+        this.roomCode = this.generateRoomCode(); 
+        this.players = [{ name: 'Host', score: 0, id: 'host', isHost: true, emoji: '👑' }];
+        this.joinedNames = new Set(['Host']); 
+        this.gameStarted = false;
+        document.getElementById('load-trivia-form').classList.add('hidden'); 
+        codeInput.value = '';
+        this.initPeer(this.roomCode + '-host'); 
+        this.showLobby(); 
+        this.saveState();
+        this.showToast('✅ Trivia cargada! ' + this.totalCategories + ' categorías');
+    } catch (e) { alert('Error al cargar.'); }
+}
 
     copyToClipboard(text) {
         if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text));
@@ -1586,10 +1715,6 @@ class JeopardyGame {
     if (!this.isHost || q.used || !this.gameStarted) return;
     console.log('Host seleccionó pregunta:', q.id, q.type);
     
-    // [NUEVO] Limpiar selección de jugadores al abrir la pregunta
-    this.clearPlayerSelections();
-    this.broadcast({ type: 'clear-player-selections' });
-    
     this.playSound('select');
     this.currentQuestion = q;
     this.answerRevealed = false;
@@ -1598,6 +1723,10 @@ class JeopardyGame {
     this.playerAnswer = null;
     this.currentShuffledOptions = null;
     this.currentShuffledLetters = null;
+    
+    this.pistasReveladas = 0;
+    this.pistasReveladasSet = new Set();
+    this.valorPregunta = 1;
     
     this.jumpCount = 0;
     this.playersJumped = new Set();
@@ -1609,9 +1738,12 @@ class JeopardyGame {
     document.getElementById('player-answer-section').classList.add('hidden');
     document.getElementById('modal-options').classList.add('hidden');
     document.getElementById('modal-anagram').classList.add('hidden');
+    document.getElementById('modal-pistas').classList.add('hidden');
+    document.getElementById('modal-truefalse').classList.add('hidden');
+    document.getElementById('modal-valor-pregunta').classList.add('hidden');
     
     const typeBadge = document.getElementById('modal-question-type');
-    typeBadge.classList.remove('hidden', 'anagram', 'options');
+    typeBadge.classList.remove('hidden', 'anagram', 'options', 'whoami', 'truefalse');
     
     if (q.type === 'options') {
         typeBadge.textContent = '🔤 Opción múltiple';
@@ -1655,6 +1787,57 @@ class JeopardyGame {
         const jumpBtn = document.getElementById('btn-jump');
         if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled);
         
+    } else if (q.type === 'whoami') {
+        typeBadge.textContent = '🕵️ ¿Quién soy?';
+        typeBadge.classList.add('whoami');
+        
+        const pistasDiv = document.getElementById('modal-pistas');
+        pistasDiv.classList.remove('hidden');
+        pistasDiv.innerHTML = (q.pistas || []).map((pista, i) => `
+            <button class="pista-btn" data-pista-index="${i}" ${this.pistasReveladasSet.has(i) ? 'disabled' : ''}>
+                ${this.pistasReveladasSet.has(i) ? pista : `🔒 Pista ${i + 1}`}
+            </button>
+        `).join('');
+        
+        pistasDiv.querySelectorAll('.pista-btn:not([disabled])').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.pistaIndex);
+                this.revelarPista(idx);
+            });
+        });
+        
+        this.updateValorPistaDisplay();
+        
+        document.getElementById('answer-buttons').style.display = 'flex';
+        document.getElementById('btn-correct').style.display = 'inline-flex';
+        document.getElementById('btn-incorrect').style.display = 'inline-flex';
+        const jumpBtn = document.getElementById('btn-jump');
+        if (jumpBtn) jumpBtn.classList.toggle('hidden', !this.jumpEnabled);
+        
+    } else if (q.type === 'truefalse') {
+        typeBadge.textContent = '✅ Verdadero/Falso';
+        typeBadge.classList.add('truefalse');
+        
+        const tfDiv = document.getElementById('modal-truefalse');
+        tfDiv.classList.remove('hidden');
+        tfDiv.innerHTML = `
+            <button class="tf-btn true-btn" data-value="Verdadero">✅ Verdadero</button>
+            <button class="tf-btn false-btn" data-value="Falso">❌ Falso</button>
+        `;
+        
+        tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const selected = btn.dataset.value;
+                const isCorrect = selected === q.answer;
+                this.handleTrueFalseAnswer(isCorrect, selected);
+            });
+        });
+        
+        document.getElementById('answer-buttons').style.display = 'none';
+        document.getElementById('btn-correct').style.display = 'none';
+        document.getElementById('btn-incorrect').style.display = 'none';
+        document.getElementById('btn-jump').classList.add('hidden');
+        
     } else {
         typeBadge.classList.add('hidden');
         document.getElementById('answer-buttons').style.display = 'flex';
@@ -1688,7 +1871,10 @@ class JeopardyGame {
         question: q.question || 'Ordena las letras para formar la palabra correcta',
         qType: q.type || 'text',
         currentPlayer: this.currentPlayer,
-        correctAnswer: q.answer
+        correctAnswer: q.answer,
+        pistas: q.pistas || [],
+        pistasReveladas: this.pistasReveladasSet.size,
+        valorPregunta: this.valorPregunta
     };
     
     if (q.type === 'options' && this.currentShuffledOptions) {
@@ -1737,11 +1923,14 @@ class JeopardyGame {
     document.getElementById('player-answer-section').classList.add('hidden');
     document.getElementById('modal-options').classList.add('hidden');
     document.getElementById('modal-anagram').classList.add('hidden');
+    document.getElementById('modal-pistas').classList.add('hidden');
+    document.getElementById('modal-truefalse').classList.add('hidden');
+    document.getElementById('modal-valor-pregunta').classList.add('hidden');
     
     const questionType = data.qType || data.type || 'text';
     
     const typeBadge = document.getElementById('modal-question-type');
-    typeBadge.classList.remove('hidden', 'anagram', 'options');
+    typeBadge.classList.remove('hidden', 'anagram', 'options', 'whoami', 'truefalse');
     
     if (questionType === 'options') {
         typeBadge.textContent = '🔤 Opción múltiple';
@@ -1765,8 +1954,96 @@ class JeopardyGame {
                 `<div class="anagram-letter">${l}</div>`
             ).join('');
         }
+    } else if (questionType === 'whoami') {
+        typeBadge.textContent = '🕵️ ¿Quién soy?';
+        typeBadge.classList.add('whoami');
+        
+        const pistasDiv = document.getElementById('modal-pistas');
+        pistasDiv.classList.remove('hidden');
+        
+        const pistasReveladas = data.pistasReveladas || 0;
+        const pistas = data.pistas || [];
+        
+        pistasDiv.innerHTML = pistas.map((pista, i) => `
+            <button class="pista-btn" data-pista-index="${i}" ${i < pistasReveladas ? 'disabled' : ''}>
+                ${i < pistasReveladas ? pista : `🔒 Pista ${i + 1}`}
+            </button>
+        `).join('');
+        
+        if (!this.isHost && this.textualMode) {
+            const myIndex = this.players.findIndex(p => p.name === this.playerName);
+            if (myIndex === this.currentPlayer) {
+                pistasDiv.querySelectorAll('.pista-btn:not([disabled])').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const idx = parseInt(btn.dataset.pistaIndex);
+                        if (this.connections.length > 0) {
+                            this.connections[0].send({ 
+                                type: 'revelar-pista', 
+                                pistaIndex: idx 
+                            });
+                        }
+                    });
+                });
+            }
+        }
+        
+        const valor = data.valorPregunta || 1;
+        const puntos = Math.round(data.points * valor);
+        
+        let valorEl = document.getElementById('modal-valor-pregunta');
+        if (valorEl) {
+            const porcentaje = valor * 100;
+            valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.points}pts = ${puntos}pts`;
+            valorEl.style.display = 'block';
+        }
+        
+        document.getElementById('answer-buttons').style.display = 'none';
+        document.getElementById('btn-correct').style.display = 'none';
+        document.getElementById('btn-incorrect').style.display = 'none';
+        document.getElementById('btn-jump').classList.add('hidden');
+        
+    } else if (questionType === 'truefalse') {
+        typeBadge.textContent = '✅ Verdadero/Falso';
+        typeBadge.classList.add('truefalse');
+        
+        const tfDiv = document.getElementById('modal-truefalse');
+        tfDiv.classList.remove('hidden');
+        tfDiv.innerHTML = `
+            <button class="tf-btn true-btn" data-value="Verdadero">✅ Verdadero</button>
+            <button class="tf-btn false-btn" data-value="Falso">❌ Falso</button>
+        `;
+        
+        if (this.textualMode && !this.isHost) {
+            const myIndex = this.players.findIndex(p => p.name === this.playerName);
+            if (myIndex === this.currentPlayer) {
+                tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const selected = btn.dataset.value;
+                        const isCorrect = selected === data.correctAnswer;
+                        if (this.connections.length > 0) {
+                            this.connections[0].send({ 
+                                type: 'player-answer', 
+                                answer: selected,
+                                isCorrect: isCorrect 
+                            });
+                        }
+                        btn.disabled = true;
+                    });
+                });
+            }
+        }
+        
+        document.getElementById('answer-buttons').style.display = 'none';
+        document.getElementById('btn-correct').style.display = 'none';
+        document.getElementById('btn-incorrect').style.display = 'none';
+        document.getElementById('btn-jump').classList.add('hidden');
+        
     } else {
         typeBadge.classList.add('hidden');
+        document.getElementById('answer-buttons').style.display = 'none';
+        document.getElementById('btn-correct').style.display = 'none';
+        document.getElementById('btn-incorrect').style.display = 'none';
+        document.getElementById('btn-jump').classList.add('hidden');
     }
     
     if (this.isHost && data.correctAnswer) {
@@ -1795,7 +2072,6 @@ class JeopardyGame {
     if (this.textualMode && !this.isHost) {
         const myIndex = this.players.findIndex(p => p.name === this.playerName);
         if (myIndex === this.currentPlayer) {
-            // [NUEVO] Mostrar el timer para el jugador que tiene el turno
             if (this.timerEnabled) {
                 const playerTimerEl = document.getElementById('player-modal-timer');
                 if (playerTimerEl) {
@@ -1813,7 +2089,10 @@ class JeopardyGame {
                     type: questionType,
                     options: data.options,
                     anagramLetters: data.anagramLetters,
-                    correctAnswer: data.correctAnswer
+                    correctAnswer: data.correctAnswer,
+                    pistas: data.pistas,
+                    pistasReveladas: data.pistasReveladas || 0,
+                    valorPregunta: data.valorPregunta || 1
                 });
             }, 200);
         }
@@ -1889,8 +2168,9 @@ handleQuestionAssigned(data) {
     document.getElementById('player-answer-status').classList.add('hidden');
     document.getElementById('player-modal-options').classList.add('hidden');
     document.getElementById('player-modal-anagram').classList.add('hidden');
+    document.getElementById('player-modal-pistas').classList.add('hidden');
+    document.getElementById('player-modal-valor').classList.add('hidden');
     
-    // [CORREGIDO] Mostrar timer al jugador SIEMPRE que esté activo
     if (this.timerEnabled) {
         let playerTimerEl = document.getElementById('player-modal-timer');
         if (!playerTimerEl) {
@@ -1941,6 +2221,51 @@ handleQuestionAssigned(data) {
                 this.sendPlayerAnswerWithOption(chosen, isCorrect);
             });
         });
+    } else if (data.type === 'whoami') {
+        // Mostrar pistas para "Quién soy" en el modal del jugador
+        document.getElementById('player-answer-input').style.display = '';
+        document.getElementById('btn-send-answer').style.display = '';
+        
+        const pistasDiv = document.getElementById('player-modal-pistas');
+        if (pistasDiv) {
+            pistasDiv.classList.remove('hidden');
+            const pistasReveladas = data.pistasReveladas || 0;
+            const pistas = data.pistas || [];
+            
+            pistasDiv.innerHTML = pistas.map((pista, i) => `
+                <button class="pista-btn" data-pista-index="${i}" ${i < pistasReveladas ? 'disabled' : ''}>
+                    ${i < pistasReveladas ? pista : `🔒 Pista ${i + 1}`}
+                </button>
+            `).join('');
+            
+            // El jugador puede revelar pistas
+            pistasDiv.querySelectorAll('.pista-btn:not([disabled])').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.pistaIndex);
+                    if (this.connections.length > 0) {
+                        this.connections[0].send({ 
+                            type: 'revelar-pista', 
+                            pistaIndex: idx 
+                        });
+                    }
+                });
+            });
+        }
+        
+        // Mostrar valor de la pregunta
+        const valor = data.valorPregunta || 1;
+        const puntos = Math.round(data.points * valor);
+        let valorEl = document.getElementById('player-modal-valor');
+        if (valorEl) {
+            const porcentaje = valor * 100;
+            valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.points}pts = ${puntos}pts`;
+            valorEl.style.display = 'block';
+        }
+        
+    } else if (data.type === 'truefalse') {
+        // Verdadero/Falso ya se maneja en showQuestionForPlayers
+        document.getElementById('player-answer-input').style.display = 'none';
+        document.getElementById('btn-send-answer').style.display = 'none';
     } else {
         document.getElementById('player-answer-input').style.display = '';
         document.getElementById('btn-send-answer').style.display = '';
@@ -1955,7 +2280,7 @@ handleQuestionAssigned(data) {
     }
     
     document.getElementById('player-answer-modal').classList.add('active');
-    if (data.type !== 'options') {
+    if (data.type !== 'options' && data.type !== 'truefalse') {
         document.getElementById('player-answer-input').focus();
     }
 }
@@ -2089,14 +2414,18 @@ handleQuestionAssigned(data) {
     if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
     
     this.stopTimer();
-    
     this.answerRevealed = true;
     this.playSound(correct ? 'correct' : 'incorrect');
     
+    let puntosOtorgados = this.currentQuestion.points;
+    if (this.currentQuestion.type === 'whoami') {
+        puntosOtorgados = Math.round(this.currentQuestion.points * this.valorPregunta);
+    }
+    
     if (correct) {
-        this.players[this.currentPlayer].score += this.currentQuestion.points;
+        this.players[this.currentPlayer].score += puntosOtorgados;
     } else if (this.hardMode) {
-        const penalty = Math.floor(this.currentQuestion.points / 2);
+        const penalty = Math.floor(puntosOtorgados / 2);
         this.players[this.currentPlayer].score -= penalty;
         if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
     }
@@ -2118,7 +2447,7 @@ handleQuestionAssigned(data) {
         answer: this.currentQuestion.answer,
         playerName: this.players[this.currentPlayer].name,
         playerEmoji: this.players[this.currentPlayer].emoji,
-        pointsAwarded: correct ? this.currentQuestion.points : (this.hardMode ? -Math.floor(this.currentQuestion.points / 2) : 0),
+        pointsAwarded: correct ? puntosOtorgados : (this.hardMode ? -Math.floor(puntosOtorgados / 2) : 0),
         players: this.players,
         playerAnswer: this.playerAnswer || null
     });
@@ -2344,73 +2673,24 @@ escapeHtml(text) {
 }
 
 saveAllQuestionsFromDOM() {
-    // Guardar tipos
     document.querySelectorAll('.q-type').forEach(select => {
         const id = parseInt(select.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.type = select.value;
     });
     
-    // Guardar preguntas
     document.querySelectorAll('.q-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.question = input.value.trim();
     });
     
-    // Guardar respuestas
     document.querySelectorAll('.a-input').forEach(input => {
         const id = parseInt(input.dataset.id);
         const q = this.questions.find(q => q.id === id);
         if (q) q.answer = input.value.trim();
     });
     
-    // Guardar opciones y actualizar answer para opción múltiple
-    document.querySelectorAll('.options-container').forEach(container => {
-        const qId = parseInt(container.dataset.id);
-        const q = this.questions.find(q => q.id === qId);
-        if (!q) return;
-        
-        const optInputs = container.querySelectorAll('.opt-input');
-        if (optInputs.length > 0) {
-            q.options = [];
-            optInputs.forEach(input => {
-                q.options.push(input.value.trim());
-            });
-            // Filtrar vacías
-            const filled = q.options.filter(o => o);
-            if (filled.length > 0 && q.type === 'options') {
-                q.answer = filled[0]; // La primera opción es la respuesta
-            }
-        }
-    });
-    
-    console.log('Preguntas guardadas desde DOM:', this.questions);
-}
-
-saveAllQuestionsFromDOM() {
-    // Guardar tipos
-    document.querySelectorAll('.q-type').forEach(select => {
-        const id = parseInt(select.dataset.id);
-        const q = this.questions.find(q => q.id === id);
-        if (q) q.type = select.value;
-    });
-    
-    // Guardar preguntas
-    document.querySelectorAll('.q-input').forEach(input => {
-        const id = parseInt(input.dataset.id);
-        const q = this.questions.find(q => q.id === id);
-        if (q) q.question = input.value.trim();
-    });
-    
-    // Guardar respuestas
-    document.querySelectorAll('.a-input').forEach(input => {
-        const id = parseInt(input.dataset.id);
-        const q = this.questions.find(q => q.id === id);
-        if (q) q.answer = input.value.trim();
-    });
-    
-    // Guardar opciones y actualizar answer para opción múltiple
     document.querySelectorAll('.options-container').forEach(container => {
         const qId = parseInt(container.dataset.id);
         const q = this.questions.find(q => q.id === qId);
@@ -2426,6 +2706,20 @@ saveAllQuestionsFromDOM() {
             if (filled.length > 0 && q.type === 'options') {
                 q.answer = filled[0];
             }
+        }
+    });
+    
+    document.querySelectorAll('.whoami-container').forEach(container => {
+        const qId = parseInt(container.dataset.id);
+        const q = this.questions.find(q => q.id === qId);
+        if (!q) return;
+        
+        const pistaInputs = container.querySelectorAll('.pista-input');
+        if (pistaInputs.length > 0) {
+            q.pistas = [];
+            pistaInputs.forEach(input => {
+                q.pistas.push(input.value.trim());
+            });
         }
     });
     
@@ -2871,6 +3165,222 @@ clearPlayerSelections() {
     // Limpiar referencia global
     this.selectedQuestionId = null;
 }
+
+// [NUEVO] Revelar pista para "Quién soy"
+revelarPista(idx) {
+    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
+    if (this.pistasReveladasSet.has(idx)) return;
+    if (this.currentQuestion.type !== 'whoami') return;
+    
+    this.pistasReveladasSet.add(idx);
+    this.pistasReveladas = this.pistasReveladasSet.size;
+    
+    if (this.pistasReveladas === 1) this.valorPregunta = 1;
+    else if (this.pistasReveladas === 2) this.valorPregunta = 0.75;
+    else if (this.pistasReveladas === 3) this.valorPregunta = 0.5;
+    
+    const pistasDiv = document.getElementById('modal-pistas');
+    if (pistasDiv) {
+        const btns = pistasDiv.querySelectorAll('.pista-btn');
+        btns.forEach((btn, i) => {
+            if (i === idx) {
+                btn.textContent = this.currentQuestion.pistas[i];
+                btn.disabled = true;
+                btn.style.background = '#d1fae5';
+                btn.style.borderColor = '#10b981';
+                btn.style.cursor = 'default';
+            }
+        });
+    }
+    
+    this.updateValorPistaDisplay();
+    this.playSound('click');
+    
+    this.broadcast({
+        type: 'pista-revelada',
+        pistaIndex: idx,
+        pistasReveladas: this.pistasReveladasSet.size,
+        pistaTexto: this.currentQuestion.pistas[idx],
+        valorPregunta: this.valorPregunta,
+        puntosBase: this.currentQuestion.points
+    });
+}
+
+// [NUEVO] Actualizar display del valor de la pregunta
+updateValorPistaDisplay() {
+    let valorEl = document.getElementById('modal-valor-pregunta');
+    if (!valorEl) {
+        const modalContent = document.querySelector('#question-modal .modal-content');
+        if (modalContent) {
+            const div = document.createElement('div');
+            div.id = 'modal-valor-pregunta';
+            div.className = 'valor-pregunta-display';
+            const pistasDiv = document.getElementById('modal-pistas');
+            if (pistasDiv) {
+                pistasDiv.parentNode.insertBefore(div, pistasDiv.nextSibling);
+            }
+            valorEl = document.getElementById('modal-valor-pregunta');
+        }
+    }
+    if (valorEl) {
+        const porcentaje = this.valorPregunta * 100;
+        const puntos = Math.round(this.currentQuestion.points * this.valorPregunta);
+        valorEl.textContent = `💎 Valor: ${porcentaje}% de ${this.currentQuestion.points}pts = ${puntos}pts`;
+        valorEl.style.display = 'block';
+    }
+}
+
+// [NUEVO] Manejar respuesta de Verdadero/Falso
+handleTrueFalseAnswer(isCorrect, selected) {
+    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
+    
+    this.stopTimer();
+    this.answerRevealed = true;
+    this.playSound(isCorrect ? 'correct' : 'incorrect');
+    
+    let puntosOtorgados = this.currentQuestion.points;
+    if (this.currentQuestion.type === 'whoami') {
+        puntosOtorgados = Math.round(this.currentQuestion.points * this.valorPregunta);
+    }
+    
+    if (isCorrect) {
+        this.players[this.currentPlayer].score += puntosOtorgados;
+    } else if (this.hardMode) {
+        const penalty = Math.floor(puntosOtorgados / 2);
+        this.players[this.currentPlayer].score -= penalty;
+        if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
+    }
+    
+    const answerDiv = document.getElementById('modal-answer');
+    answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
+    answerDiv.classList.add(isCorrect ? 'correct-anim' : 'incorrect-anim');
+    document.getElementById('correct-answer-text').textContent = `Respuesta: ${this.currentQuestion.answer}`;
+    document.getElementById('answer-buttons').style.display = 'none';
+    
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.dataset.value === this.currentQuestion.answer) {
+            btn.style.background = '#d1fae5';
+            btn.style.borderColor = '#10b981';
+        }
+        if (btn.dataset.value === selected && !isCorrect) {
+            btn.style.background = '#fee2e2';
+            btn.style.borderColor = '#ef4444';
+        }
+    });
+    
+    const closeBtn = document.querySelector('#question-modal .close');
+    if (closeBtn) closeBtn.style.display = 'flex';
+    
+    this.currentQuestion.used = true;
+    
+    this.broadcast({
+        type: 'answer-result',
+        correct: isCorrect,
+        answer: this.currentQuestion.answer,
+        playerName: this.players[this.currentPlayer].name,
+        playerEmoji: this.players[this.currentPlayer].emoji,
+        pointsAwarded: isCorrect ? puntosOtorgados : (this.hardMode ? -Math.floor(puntosOtorgados / 2) : 0),
+        players: this.players,
+        selectedOption: selected
+    });
+    
+    do {
+        this.currentPlayer = (this.currentPlayer + 1) % this.players.length;
+    } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
+    
+    this.broadcast({
+        type: 'game-update',
+        questionId: this.currentQuestion.id,
+        players: this.players,
+        currentPlayer: this.currentPlayer
+    });
+    
+    document.getElementById('player-answer-modal').classList.remove('active');
+    
+    if (this.textualMode) {
+        this.broadcast({
+            type: 'player-turn',
+            currentPlayer: this.currentPlayer,
+            playerName: this.players[this.currentPlayer].name
+        });
+    }
+    
+    this.renderBoard();
+    this.updateManualPointsPanel();
+    this.saveState();
+    
+    if (this.questions.every(q => q.used)) {
+        setTimeout(() => this.endGame(), 1500);
+    }
+
+    handleRevelarPista(conn, data) {
+    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
+    if (this.currentQuestion.type !== 'whoami') return;
+    
+    const playerName = conn.metadata?.name;
+    const playerIndex = this.players.findIndex(p => p.name === playerName);
+    if (playerIndex !== this.currentPlayer) return;
+    
+    const idx = data.pistaIndex;
+    if (this.pistasReveladasSet.has(idx)) return;
+    
+    this.revelarPista(idx);
+}
+}
+
+handlePistaRevelada(data) {
+    const pistasDiv = document.getElementById('modal-pistas');
+    if (pistasDiv) {
+        const btns = pistasDiv.querySelectorAll('.pista-btn');
+        btns.forEach((btn, i) => {
+            if (i === data.pistaIndex) {
+                btn.textContent = data.pistaTexto;
+                btn.disabled = true;
+                btn.style.background = '#d1fae5';
+                btn.style.borderColor = '#10b981';
+                btn.style.cursor = 'default';
+            }
+        });
+    }
+    
+    // También actualizar en el modal del jugador
+    const playerPistasDiv = document.getElementById('player-modal-pistas');
+    if (playerPistasDiv) {
+        const btns = playerPistasDiv.querySelectorAll('.pista-btn');
+        btns.forEach((btn, i) => {
+            if (i === data.pistaIndex) {
+                btn.textContent = data.pistaTexto;
+                btn.disabled = true;
+                btn.style.background = '#d1fae5';
+                btn.style.borderColor = '#10b981';
+                btn.style.cursor = 'default';
+            }
+        });
+    }
+    
+    const valor = data.valorPregunta || 1;
+    const puntos = Math.round((data.puntosBase || 0) * valor);
+    
+    // Actualizar valor en el modal del jugador
+    let valorEl = document.getElementById('player-modal-valor');
+    if (valorEl) {
+        const porcentaje = valor * 100;
+        valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
+        valorEl.style.display = 'block';
+    }
+    
+    // Actualizar valor en el modal del host
+    let hostValorEl = document.getElementById('modal-valor-pregunta');
+    if (hostValorEl) {
+        const porcentaje = valor * 100;
+        hostValorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
+        hostValorEl.style.display = 'block';
+    }
+    
+    this.showToast(`🔓 Pista revelada! Valor: ${valor * 100}%`);
+}
+
 
 }
 
