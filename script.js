@@ -81,6 +81,7 @@ class JeopardyGame {
         this.pistasReveladas = 0;
         this.pistasReveladasSet = new Set();
         this.valorPregunta = 1;
+        this.editMode = null;
 
         this.setupMusic();
         this.musicStarted = false;
@@ -329,6 +330,7 @@ class JeopardyGame {
     this.onClick('btn-manual-add', () => this.adjustManualPoints(1));
     this.onClick('btn-manual-sub', () => this.adjustManualPoints(-1));
     this.onClick('btn-send-answer', () => this.sendPlayerAnswer());
+    this.onClick('edit-trivia-btn', () => { this.editTrivia(); this.playSound('click'); });
     this.onClick('edit-trivia-btn', () => { this.editTrivia(); this.playSound('click'); });
     
     const closeBtn = document.querySelector('#question-modal .close');
@@ -986,14 +988,12 @@ class JeopardyGame {
     // Mostrar opción para cambiar número de categorías
     const controls = document.createElement('div');
     controls.className = 'category-controls';
-    controls.style.cssText = 'display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
+    controls.style.cssText = 'display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
     controls.innerHTML = `
-        <div class="field" style="flex-direction:row;gap:8px;">
-            <label style="font-size:0.85rem;color:var(--text-secondary);">Categorías:</label>
-            <input type="number" id="edit-categories-count" min="2" max="8" value="${this.totalCategories}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;">
-            <button id="apply-categories-count" class="btn btn-sm btn-primary">Aplicar</button>
-        </div>
-        <p class="hint" style="margin:0;font-size:0.8rem;">Cambiar número de categorías (2-8)</p>
+        <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categorías:</label>
+        <input type="number" id="edit-categories-count" min="2" max="8" value="${this.totalCategories}" style="width:65px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:0.95rem;">
+        <button id="apply-categories-count" class="btn btn-sm btn-primary" style="padding:6px 16px;font-size:0.85rem;">Aplicar</button>
+        <span style="font-size:0.8rem;color:var(--text-secondary);margin-left:4px;">Cambiar número de categorías (2-8)</span>
     `;
     container.appendChild(controls);
     
@@ -1024,6 +1024,20 @@ class JeopardyGame {
     });
     
     this.showScreen('categories-screen');
+}
+
+renderCategoryInputs(container) {
+    container.innerHTML = '';
+    for (let i = 0; i < this.totalCategories; i++) {
+        const div = document.createElement('div');
+        div.className = 'category-input';
+        div.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+        div.innerHTML = `
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categoría ${i + 1}</label>
+            <input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
+        `;
+        container.appendChild(div);
+    }
 }
 
 renderCategoryInputs(container) {
@@ -1066,9 +1080,7 @@ renderCategoryInputs(container) {
     }
 }
 
-    showQuestionsScreen() {
-    if (!this.isHost) return;
-    const container = document.getElementById('questions-container');
+renderQuestionsList(container) {
     container.innerHTML = '';
     const existingQuestions = [...this.questions];
     this.questions = [];
@@ -1076,25 +1088,29 @@ renderCategoryInputs(container) {
     
     this.categories.forEach(cat => {
         for (let i = 0; i < this.questionsPerCategory; i++) {
-            const existing = existingQuestions.find(q => q.category === cat && q.points === (i + 1) * 100);
-            const q = existing || { 
-                id, 
-                category: cat, 
-                points: (i + 1) * 100, 
-                question: '', 
-                answer: '', 
-                used: false, 
-                type: 'text', 
+            const points = (i + 1) * 100;
+            const existing = existingQuestions.find(q => q.category === cat && q.points === points);
+            const q = existing || {
+                id,
+                category: cat,
+                points: points,
+                question: '',
+                answer: '',
+                used: false,
+                type: 'text',
                 options: ['', ''],
                 pistas: ['', '', '']
             };
             q.id = id;
+            
+            // Asegurar opciones
             if (!q.options || !Array.isArray(q.options)) {
                 q.options = ['', ''];
             }
             while (q.options.length < 2) q.options.push('');
             if (q.options.length > 4) q.options = q.options.slice(0, 4);
             
+            // Asegurar pistas
             if (!q.pistas || !Array.isArray(q.pistas)) {
                 q.pistas = ['', '', ''];
             }
@@ -1160,6 +1176,7 @@ renderCategoryInputs(container) {
             `;
             container.appendChild(div);
             
+            // Event listeners (igual que en la versión anterior)
             setTimeout(() => {
                 const typeSelect = div.querySelector('.q-type');
                 const optionsContainer = div.querySelector('.options-container');
@@ -1262,6 +1279,69 @@ renderCategoryInputs(container) {
             id++;
         }
     });
+}
+
+    showQuestionsScreen() {
+    if (!this.isHost) return;
+    const container = document.getElementById('questions-container');
+    container.innerHTML = '';
+    
+    // Controles para editar cantidad de preguntas por categoría
+    const controls = document.createElement('div');
+    controls.className = 'questions-controls';
+    controls.style.cssText = 'display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
+    controls.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categorías:</label>
+            <input type="number" id="edit-categories-count-2" min="2" max="8" value="${this.totalCategories}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:0.95rem;">
+            <button id="apply-categories-count-2" class="btn btn-sm btn-primary" style="padding:6px 12px;font-size:0.8rem;">Aplicar</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-left:1px solid var(--border);padding-left:12px;">
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Preguntas por categoría:</label>
+            <input type="number" id="edit-questions-count" min="1" max="10" value="${this.questionsPerCategory}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:0.95rem;">
+            <button id="apply-questions-count" class="btn btn-sm btn-primary" style="padding:6px 12px;font-size:0.8rem;">Aplicar</button>
+        </div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Categorías (2-8) | Preguntas (1-10)</span>
+    `;
+    container.appendChild(controls);
+    
+    // Contenedor de preguntas
+    const questionsContainer = document.createElement('div');
+    questionsContainer.id = 'questions-list-container';
+    container.appendChild(questionsContainer);
+    
+    this.renderQuestionsList(questionsContainer);
+    
+    // Evento para cambiar número de categorías
+    document.getElementById('apply-categories-count-2').addEventListener('click', () => {
+        const newCount = parseInt(document.getElementById('edit-categories-count-2').value);
+        if (newCount < 2 || newCount > 8) {
+            alert('El número de categorías debe ser entre 2 y 8');
+            return;
+        }
+        this.totalCategories = newCount;
+        while (this.categories.length < newCount) {
+            this.categories.push(`Categoría ${this.categories.length + 1}`);
+        }
+        this.categories = this.categories.slice(0, newCount);
+        this.rebuildQuestions();
+        this.renderQuestionsList(questionsContainer);
+        this.saveState();
+    });
+    
+    // Evento para cambiar número de preguntas
+    document.getElementById('apply-questions-count').addEventListener('click', () => {
+        const newCount = parseInt(document.getElementById('edit-questions-count').value);
+        if (newCount < 1 || newCount > 10) {
+            alert('El número de preguntas debe ser entre 1 y 10');
+            return;
+        }
+        this.questionsPerCategory = newCount;
+        this.rebuildQuestions();
+        this.renderQuestionsList(questionsContainer);
+        this.saveState();
+    });
+    
     this.showScreen('questions-screen');
 }
 
@@ -2089,10 +2169,11 @@ renderCategoryInputs(container) {
             <button class="tf-btn false-btn" data-value="Falso">❌ Falso</button>
         `;
         
-        // En modo textual, el jugador puede seleccionar
-        if (this.textualMode && !this.isHost) {
+        // [CORREGIDO] Siempre mostrar botones para el jugador que tiene el turno
+        if (!this.isHost) {
             const myIndex = this.players.findIndex(p => p.name === this.playerName);
             if (myIndex === this.currentPlayer) {
+                // El jugador puede seleccionar
                 tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const selected = btn.dataset.value;
@@ -2110,21 +2191,19 @@ renderCategoryInputs(container) {
                         this.showToast(isCorrect ? '✅ ¡Correcto!' : '❌ Incorrecto');
                     });
                 });
+                // Habilitar botones visualmente
+                tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
+                    btn.style.cursor = 'pointer';
+                    btn.style.opacity = '1';
+                });
             } else {
-                // Si no es el turno del jugador, deshabilitar botones
+                // No es el turno del jugador, deshabilitar botones
                 tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
                     btn.disabled = true;
                     btn.style.opacity = '0.5';
                     btn.style.cursor = 'default';
                 });
             }
-        } else if (!this.textualMode && !this.isHost) {
-            // Modo no textual: el jugador solo ve la pregunta, no puede responder
-            tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'default';
-            });
         }
         
         document.getElementById('answer-buttons').style.display = 'none';
@@ -2175,20 +2254,23 @@ renderCategoryInputs(container) {
                 }
             }
             
-            setTimeout(() => {
-                this.showPlayerAnswerModal({
-                    category: data.category,
-                    points: data.points,
-                    question: data.question,
-                    type: questionType,
-                    options: data.options,
-                    anagramLetters: data.anagramLetters,
-                    correctAnswer: data.correctAnswer,
-                    pistas: data.pistas,
-                    pistasReveladas: data.pistasReveladas || 0,
-                    valorPregunta: data.valorPregunta || 1
-                });
-            }, 200);
+            // Para Verdadero/Falso no mostrar el modal de respuesta adicional
+            if (questionType !== 'truefalse') {
+                setTimeout(() => {
+                    this.showPlayerAnswerModal({
+                        category: data.category,
+                        points: data.points,
+                        question: data.question,
+                        type: questionType,
+                        options: data.options,
+                        anagramLetters: data.anagramLetters,
+                        correctAnswer: data.correctAnswer,
+                        pistas: data.pistas,
+                        pistasReveladas: data.pistasReveladas || 0,
+                        valorPregunta: data.valorPregunta || 1
+                    });
+                }, 200);
+            }
         }
     }
 }
@@ -3493,6 +3575,35 @@ showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
             if (anim.parentNode) anim.remove();
         }, 500);
     }, 2500);
+}
+
+rebuildQuestions() {
+    const newQuestions = [];
+    let id = 0;
+    this.categories.forEach(cat => {
+        for (let i = 0; i < this.questionsPerCategory; i++) {
+            const points = (i + 1) * 100;
+            const existing = this.questions.find(q => q.category === cat && q.points === points);
+            if (existing) {
+                existing.id = id;
+                newQuestions.push(existing);
+            } else {
+                newQuestions.push({
+                    id,
+                    category: cat,
+                    points: points,
+                    question: '',
+                    answer: '',
+                    used: false,
+                    type: 'text',
+                    options: ['', ''],
+                    pistas: ['', '', '']
+                });
+            }
+            id++;
+        }
+    });
+    this.questions = newQuestions;
 }
 }
 
