@@ -922,3 +922,233 @@ input:checked + .slider:before { transform: translateX(22px); }
     user-select: none;
     pointer-events: none;
 }
+
+/* Corregir diseño del tablero en móvil */
+#game-board {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding: 4px;
+}
+
+.game-cell {
+    background: var(--primary);
+    color: white;
+    padding: 10px 6px;
+    border-radius: 6px;
+    text-align: center;
+    cursor: default;
+    transition: all var(--transition);
+    font-weight: 600;
+    min-height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    word-break: break-word;
+    min-width: 40px;
+}
+
+.game-cell.clickable {
+    cursor: pointer;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.game-cell.clickable:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+}
+
+.game-cell.clickable:active {
+    transform: scale(0.97);
+}
+
+.game-cell.used {
+    background: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.game-cell.category {
+    background: #334155;
+    cursor: default;
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.3px;
+    padding: 8px 4px;
+}
+
+/* Responsive para móvil */
+@media (max-width: 700px) {
+    .container {
+        padding: 12px;
+    }
+    
+    #game-board {
+        gap: 4px;
+        font-size: 0.65rem;
+    }
+    
+    .game-cell {
+        padding: 6px 3px;
+        font-size: 0.6rem;
+        min-height: 32px;
+        min-width: 28px;
+        border-radius: 4px;
+    }
+    
+    .game-cell.category {
+        font-size: 0.55rem;
+        padding: 4px 2px;
+    }
+    
+    .game-header {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .game-header h1 {
+        font-size: 1.2rem;
+    }
+    
+    #host-controls {
+        width: 100%;
+    }
+    
+    #host-controls .btn {
+        width: 100%;
+        justify-content: center;
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    #game-board {
+        gap: 3px;
+    }
+    
+    .game-cell {
+        padding: 4px 2px;
+        font-size: 0.5rem;
+        min-height: 26px;
+        min-width: 22px;
+        border-radius: 3px;
+    }
+    
+    .game-cell.category {
+        font-size: 0.45rem;
+        padding: 3px 1px;
+    }
+    
+    .game-cell.clickable:hover {
+        transform: none;
+    }
+}
+
+/* Corregir controles de categorías y preguntas en móvil */
+@media (max-width: 600px) {
+    .questions-controls,
+    .category-controls {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    
+    .questions-controls > div,
+    .category-controls > div {
+        flex-wrap: wrap;
+        justify-content: center;
+        border-left: none !important;
+        padding-left: 0 !important;
+    }
+    
+    .questions-controls .btn,
+    .category-controls .btn {
+        padding: 6px 12px !important;
+        font-size: 0.75rem !important;
+    }
+    
+    .questions-controls input,
+    .category-controls input {
+        width: 50px !important;
+        padding: 4px 6px !important;
+    }
+    
+    .question-inputs {
+        grid-template-columns: 1fr !important;
+    }
+    
+    #category-inputs-container {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Corregir modal en móvil */
+@media (max-width: 600px) {
+    .modal-content {
+        padding: 16px !important;
+        max-width: 95% !important;
+    }
+    
+    .question-display {
+        font-size: 1rem !important;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+        gap: 8px !important;
+    }
+    
+    .modal-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .tf-btn {
+        padding: 10px 16px !important;
+        font-size: 0.9rem !important;
+        min-width: 80px !important;
+    }
+    
+    #modal-truefalse {
+        gap: 8px !important;
+    }
+    
+    .pista-btn {
+        font-size: 0.85rem !important;
+        padding: 10px 14px !important;
+    }
+    
+    .timer-display {
+        font-size: 1.2rem !important;
+        padding: 4px 12px !important;
+        min-width: 60px !important;
+    }
+    
+    .valor-pregunta-display {
+        font-size: 0.85rem !important;
+        padding: 6px 12px !important;
+    }
+}
+
+/* Corregir lobby en móvil */
+@media (max-width: 600px) {
+    .lobby-content {
+        grid-template-columns: 1fr !important;
+    }
+    
+    #lobby-host-actions,
+    #lobby-player-actions {
+        flex-direction: column;
+        gap: 8px !important;
+    }
+    
+    #lobby-host-actions .btn,
+    #lobby-player-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
