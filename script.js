@@ -1,4 +1,4 @@
-const APP_VERSION = '1.0.8';
+const APP_VERSION = '1.0.9';
 const VERSION_HISTORY = {
     '1.0.0': 'Versión inicial',
     '1.0.1': 'Corrección de selección de preguntas en modo textual',
@@ -9,6 +9,7 @@ const VERSION_HISTORY = {
     '1.0.6': 'Mejora visual para host',
     '1.0.7': 'Nuevos tipos de pregunta: ¿Quién soy? y Verdadero/Falso',
     '1.0.8': 'Edicion de trivia y arreglos en las preguntas'
+    '1.0.9': 'Eliminacion de vistas de categorias he implementacion de categorias en la vista de preguntas y respuestas, y agregado del Easter Egg "ABY"'
 };
 
 function updateVersionDisplay() {
