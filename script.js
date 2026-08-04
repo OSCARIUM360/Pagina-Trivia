@@ -328,6 +328,7 @@ class JeopardyGame {
     this.onClick('btn-manual-add', () => this.adjustManualPoints(1));
     this.onClick('btn-manual-sub', () => this.adjustManualPoints(-1));
     this.onClick('btn-send-answer', () => this.sendPlayerAnswer());
+    this.onClick('edit-trivia-btn', () => { this.editTrivia(); this.playSound('click'); });
     
     const closeBtn = document.querySelector('#question-modal .close');
     if (closeBtn) closeBtn.addEventListener('click', () => { this.closeModal(); this.playSound('click'); });
@@ -977,22 +978,92 @@ class JeopardyGame {
     }
 
     showCategoriesScreen() {
-        if (!this.isHost) return;
-        const container = document.getElementById('category-inputs'); container.innerHTML = '';
-        for (let i = 0; i < this.totalCategories; i++) {
-            const div = document.createElement('div'); div.className = 'category-input';
-            div.innerHTML = `<label>Categoría ${i + 1}</label><input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}">`;
-            container.appendChild(div);
+    if (!this.isHost) return;
+    const container = document.getElementById('category-inputs');
+    container.innerHTML = '';
+    
+    // Mostrar opción para cambiar número de categorías
+    const controls = document.createElement('div');
+    controls.className = 'category-controls';
+    controls.style.cssText = 'display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
+    controls.innerHTML = `
+        <div class="field" style="flex-direction:row;gap:8px;">
+            <label style="font-size:0.85rem;color:var(--text-secondary);">Categorías:</label>
+            <input type="number" id="edit-categories-count" min="2" max="8" value="${this.totalCategories}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;">
+            <button id="apply-categories-count" class="btn btn-sm btn-primary">Aplicar</button>
+        </div>
+        <p class="hint" style="margin:0;font-size:0.8rem;">Cambiar número de categorías (2-8)</p>
+    `;
+    container.appendChild(controls);
+    
+    // Inputs para categorías
+    const inputsContainer = document.createElement('div');
+    inputsContainer.id = 'category-inputs-container';
+    inputsContainer.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;';
+    container.appendChild(inputsContainer);
+    
+    this.renderCategoryInputs(inputsContainer);
+    
+    // Evento para cambiar número de categorías
+    document.getElementById('apply-categories-count').addEventListener('click', () => {
+        const newCount = parseInt(document.getElementById('edit-categories-count').value);
+        if (newCount < 2 || newCount > 8) {
+            alert('El número de categorías debe ser entre 2 y 8');
+            return;
         }
-        this.showScreen('categories-screen');
+        this.totalCategories = newCount;
+        // Ajustar categorías existentes
+        while (this.categories.length < newCount) {
+            this.categories.push(`Categoría ${this.categories.length + 1}`);
+        }
+        this.categories = this.categories.slice(0, newCount);
+        // Re-renderizar
+        this.renderCategoryInputs(inputsContainer);
+        this.saveState();
+    });
+    
+    this.showScreen('categories-screen');
+}
+
+renderCategoryInputs(container) {
+    container.innerHTML = '';
+    for (let i = 0; i < this.totalCategories; i++) {
+        const div = document.createElement('div');
+        div.className = 'category-input';
+        div.innerHTML = `
+            <label>Categoría ${i + 1}</label>
+            <input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}">
+        `;
+        container.appendChild(div);
     }
+}
 
     submitCategories() {
-        if (!this.isHost) return;
-        const inputs = document.querySelectorAll('.category-name'); this.categories = []; let valid = true;
-        inputs.forEach((input, i) => { const name = input.value.trim(); if (!name) { alert(`Nombre para Categoría ${i + 1}`); valid = false; } this.categories.push(name); });
-        if (valid) { this.showQuestionsScreen(); this.saveState(); }
+    if (!this.isHost) return;
+    const inputs = document.querySelectorAll('.category-name');
+    this.categories = [];
+    let valid = true;
+    inputs.forEach((input, i) => {
+        const name = input.value.trim();
+        if (!name) {
+            alert(`Nombre para Categoría ${i + 1}`);
+            valid = false;
+        }
+        this.categories.push(name);
+    });
+    if (valid) {
+        // Si venimos de edición, volver al lobby
+        if (this.editMode === 'categories') {
+            this.editMode = null;
+            this.showLobby();
+            this.saveState();
+            this.showToast('✅ Categorías actualizadas');
+        } else {
+            this.showQuestionsScreen();
+            this.saveState();
+        }
     }
+}
 
     showQuestionsScreen() {
     if (!this.isHost) return;
@@ -1321,8 +1392,17 @@ class JeopardyGame {
     
     if (valid) {
         console.log('Validación exitosa. Preguntas finales:', this.questions);
-        this.showLobby();
-        this.saveState();
+        
+        // Si venimos de edición, volver al lobby
+        if (this.editMode === 'questions') {
+            this.editMode = null;
+            this.showLobby();
+            this.saveState();
+            this.showToast('✅ Preguntas actualizadas');
+        } else {
+            this.showLobby();
+            this.saveState();
+        }
     }
 }
 
@@ -1982,11 +2062,13 @@ class JeopardyGame {
         
         const valor = data.valorPregunta || 1;
         const puntos = Math.round(data.points * valor);
+        const pistasReveladasCount = data.pistasReveladas || 0;
+        const totalPistas = data.pistas?.length || 3;
         
         let valorEl = document.getElementById('modal-valor-pregunta');
         if (valorEl) {
             const porcentaje = valor * 100;
-            valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.points}pts = ${puntos}pts`;
+            valorEl.textContent = `💎 Valor actual: ${porcentaje}% (${pistasReveladasCount}/${totalPistas} pistas) = ${puntos}pts`;
             valorEl.style.display = 'block';
         }
         
@@ -2006,6 +2088,7 @@ class JeopardyGame {
             <button class="tf-btn false-btn" data-value="Falso">❌ Falso</button>
         `;
         
+        // En modo textual, el jugador puede seleccionar
         if (this.textualMode && !this.isHost) {
             const myIndex = this.players.findIndex(p => p.name === this.playerName);
             if (myIndex === this.currentPlayer) {
@@ -2020,10 +2103,27 @@ class JeopardyGame {
                                 isCorrect: isCorrect 
                             });
                         }
-                        btn.disabled = true;
+                        // Deshabilitar todos los botones
+                        tfDiv.querySelectorAll('.tf-btn').forEach(b => b.disabled = true);
+                        // Mostrar estado
+                        this.showToast(isCorrect ? '✅ ¡Correcto!' : '❌ Incorrecto');
                     });
                 });
+            } else {
+                // Si no es el turno del jugador, deshabilitar botones
+                tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'default';
+                });
             }
+        } else if (!this.textualMode && !this.isHost) {
+            // Modo no textual: el jugador solo ve la pregunta, no puede responder
+            tfDiv.querySelectorAll('.tf-btn').forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'default';
+            });
         }
         
         document.getElementById('answer-buttons').style.display = 'none';
@@ -2415,13 +2515,20 @@ handleQuestionAssigned(data) {
         puntosOtorgados = Math.round(this.currentQuestion.points * this.valorPregunta);
     }
     
+    let puntosFinales = 0;
     if (correct) {
+        puntosFinales = puntosOtorgados;
         this.players[this.currentPlayer].score += puntosOtorgados;
     } else if (this.hardMode) {
         const penalty = Math.floor(puntosOtorgados / 2);
+        puntosFinales = -penalty;
         this.players[this.currentPlayer].score -= penalty;
         if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
     }
+    
+    // Mostrar animación de puntos
+    const player = this.players[this.currentPlayer];
+    this.showPointsAnimation(player.name, player.emoji || '', puntosFinales, correct);
     
     const answerDiv = document.getElementById('modal-answer');
     answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
@@ -3286,6 +3393,106 @@ handleRevelarPista(conn, data) {
         
         this.showToast(`🔓 Pista revelada! Valor: ${valor * 100}%`);
     }
+
+    editTrivia() {
+    if (!this.isHost) return;
+    
+    // Preguntar si quiere editar categorías o preguntas
+    const choice = confirm('¿Qué quieres editar?\n\n- "Aceptar" para editar categorías\n- "Cancelar" para editar preguntas');
+    
+    if (choice) {
+        // Editar categorías
+        this.editMode = 'categories';
+        this.showCategoriesScreen();
+    } else {
+        // Editar preguntas
+        this.editMode = 'questions';
+        this.showQuestionsScreen();
+    }
+}
+
+showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
+    // Crear el elemento de animación
+    const anim = document.createElement('div');
+    anim.className = 'points-animation';
+    anim.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${isCorrect ? 'rgba(16, 185, 129, 0.95)' : 'rgba(239, 68, 68, 0.95)'};
+        color: white;
+        padding: 20px 40px;
+        border-radius: 16px;
+        font-size: 2rem;
+        font-weight: 700;
+        text-align: center;
+        z-index: 2000;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        animation: pointsAppear 0.5s ease forwards;
+        pointer-events: none;
+    `;
+    
+    const sign = points > 0 ? '+' : '';
+    const emoji = isCorrect ? '🎉' : '😢';
+    
+    anim.innerHTML = `
+        <div style="font-size: 1.2rem; margin-bottom: 4px;">${playerEmoji || ''} ${playerName}</div>
+        <div style="font-size: 2.5rem; ${isCorrect ? '' : 'color: #ffcccc;'}">
+            ${sign}${points} pts ${emoji}
+        </div>
+    `;
+    
+    document.body.appendChild(anim);
+    
+    // Encontrar el elemento del jugador en la barra
+    const playersBar = document.getElementById('players-bar');
+    if (playersBar) {
+        const playerElements = playersBar.querySelectorAll('.player-score');
+        let targetElement = null;
+        playerElements.forEach(el => {
+            if (el.textContent.includes(playerName)) {
+                targetElement = el;
+            }
+        });
+        
+        if (targetElement) {
+            // Obtener posición del elemento objetivo
+            const targetRect = targetElement.getBoundingClientRect();
+            const animRect = anim.getBoundingClientRect();
+            
+            // Calcular desplazamiento
+            const deltaX = targetRect.left + targetRect.width/2 - animRect.left - animRect.width/2;
+            const deltaY = targetRect.top + targetRect.height/2 - animRect.top - animRect.height/2;
+            
+            // Animar hacia el objetivo
+            setTimeout(() => {
+                anim.style.transition = 'all 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                anim.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
+                anim.style.opacity = '0.5';
+                
+                // Destacar el jugador
+                targetElement.style.transition = 'all 0.3s ease';
+                targetElement.style.transform = 'scale(1.2)';
+                targetElement.style.boxShadow = `0 0 30px ${isCorrect ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`;
+                
+                setTimeout(() => {
+                    targetElement.style.transform = '';
+                    targetElement.style.boxShadow = '';
+                }, 800);
+            }, 600);
+        }
+    }
+    
+    // Eliminar el elemento después de la animación
+    setTimeout(() => {
+        anim.style.transition = 'opacity 0.5s ease';
+        anim.style.opacity = '0';
+        setTimeout(() => {
+            if (anim.parentNode) anim.remove();
+        }, 500);
+    }, 2500);
+}
 }
 
 document.addEventListener('DOMContentLoaded', function() {
