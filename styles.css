@@ -1204,3 +1204,84 @@ input:checked + .slider:before { transform: translateX(22px); }
         padding: 3px 8px !important;
     }
 }
+
+/* [NUEVO] Easter egg para ABY */
+@keyframes abyColorShift {
+    0% {
+        color: #ff6b9d;
+        text-shadow: 0 0 10px rgba(255, 107, 157, 0.3);
+    }
+    25% {
+        color: #ff9a9e;
+        text-shadow: 0 0 15px rgba(255, 154, 158, 0.4);
+    }
+    50% {
+        color: #d4a373;
+        text-shadow: 0 0 10px rgba(212, 163, 115, 0.3);
+    }
+    75% {
+        color: #cc8e6a;
+        text-shadow: 0 0 15px rgba(204, 142, 106, 0.4);
+    }
+    100% {
+        color: #ff6b9d;
+        text-shadow: 0 0 10px rgba(255, 107, 157, 0.3);
+    }
+}
+
+.player-tag.aby-easter-egg,
+.player-score.aby-easter-egg {
+    animation: abyColorShift 2s ease-in-out infinite !important;
+    border: 2px solid #FFD700 !important;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3) !important;
+    position: relative;
+    overflow: visible !important;
+}
+
+.player-tag.aby-easter-egg.host {
+    background: linear-gradient(135deg, #ff6b9d, #d4a373) !important;
+    color: white !important;
+    border-color: #FFD700 !important;
+}
+
+/* Partículas doradas */
+.aby-particle {
+    pointer-events: none;
+    user-select: none;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    animation: abyParticleFloat 2s ease-out forwards;
+}
+
+@keyframes abyParticleFloat {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--tx), var(--ty)) scale(0.3);
+    }
+}
+
+/* Mejorar visual de la animación de puntos */
+.points-animation {
+    user-select: none;
+    pointer-events: none;
+    animation: pointsAppear 0.5s ease forwards;
+}
+
+@keyframes pointsAppear {
+    0% {
+        transform: translate(-50%, -50%) scale(0.5);
+        opacity: 0;
+    }
+    60% {
+        transform: translate(-50%, -50%) scale(1.1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
