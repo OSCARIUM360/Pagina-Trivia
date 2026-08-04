@@ -1,4 +1,4 @@
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.8';
 const VERSION_HISTORY = {
     '1.0.0': 'Versión inicial',
     '1.0.1': 'Corrección de selección de preguntas en modo textual',
@@ -7,7 +7,8 @@ const VERSION_HISTORY = {
     '1.0.4': 'Timer visible para jugadores',
     '1.0.5': 'Corrección de penalización en modo difícil con timer',
     '1.0.6': 'Mejora visual para host',
-    '1.0.7': 'Nuevos tipos de pregunta: ¿Quién soy? y Verdadero/Falso'
+    '1.0.7': 'Nuevos tipos de pregunta: ¿Quién soy? y Verdadero/Falso',
+    '1.0.8': 'Edicion de trivia y arreglos en las preguntas'
 };
 
 function updateVersionDisplay() {
