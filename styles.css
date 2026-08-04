@@ -1152,3 +1152,55 @@ input:checked + .slider:before { transform: translateX(22px); }
         justify-content: center;
     }
 }
+
+/* Estilos para controles de edición en questions-screen */
+.questions-controls input[type="number"] {
+    width: 55px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.questions-controls input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.questions-controls .category-name-edit {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    width: 120px;
+    flex: 1;
+    min-width: 80px;
+    font-family: inherit;
+}
+
+.questions-controls .category-name-edit:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+@media (max-width: 600px) {
+    .questions-controls .category-name-edit {
+        width: 80px;
+        min-width: 60px;
+        font-size: 0.75rem;
+    }
+    
+    .questions-controls input[type="number"] {
+        width: 45px;
+        font-size: 0.8rem;
+    }
+    
+    .questions-controls .btn-sm {
+        font-size: 0.7rem !important;
+        padding: 3px 8px !important;
+    }
+}
