@@ -12,7 +12,7 @@ const VERSION_HISTORY = {
     '1.0.3': 'Sincronización de selección entre host y jugadores',
     '1.0.4': 'Timer visible para jugadores',
     '1.0.5': 'Corrección de penalización en modo difícil con timer',
-    '1.0.7': 'Mejora visual para host',
+    '1.0.6': 'Mejora visual para host',
     '1.0.7': 'Nuevos tipos de pregunta: ¿Quién soy? y Verdadero/Falso'
 };
 
@@ -45,61 +45,62 @@ function incrementVersion() {
 
 class JeopardyGame {
     constructor(roomFromQR) {
-    this.categories = [];
-    this.questions = [];
-    this.players = [];
-    this.currentPlayer = 0;
-    this.totalCategories = 0;
-    this.questionsPerCategory = 0;
-    this.currentQuestion = null;
-    this.gameStarted = false;
-    this.answerRevealed = false;
-    this.isHost = false;
-    this.roomCode = '';
-    this.peer = null;
-    this.connections = [];
-    this.joinedNames = new Set();
-    this.musicPlaying = false;
-    this.playerName = '';
-    this.playerEmoji = '';
-    this.sortedPlayers = [];
-    this.roomFromQR = roomFromQR;
-    this.jumpEnabled = false;
-    this.hardMode = false;
-    this.textualMode = false;
-    this.timerEnabled = false;
-    this.timerSeconds = 0;
-    this.timerInterval = null;
-    this.timerRunning = false;
-    this.timerTimeout = false;
-    this.jumpCount = 0;
-    this.playersJumped = new Set();
-    this.questionJumped = false;
-    this.originalPlayer = 0;
-    this.playerAnswer = null;
-    this.availableEmojis = this.getEmojiList();
-    this.timerTextSeconds = 25;
-    this.timerOptionsSeconds = 15;
-    this.timerAnagramSeconds = 20;
-    this.selectedQuestionId = null;
-    this.selectedQuestionData = null;
-    this.pistasReveladas = 0;
-    this.pistasReveladasSet = new Set();
-    this.valorPregunta = 1;
+        this.categories = [];
+        this.questions = [];
+        this.players = [];
+        this.currentPlayer = 0;
+        this.totalCategories = 0;
+        this.questionsPerCategory = 0;
+        this.currentQuestion = null;
+        this.gameStarted = false;
+        this.answerRevealed = false;
+        this.isHost = false;
+        this.roomCode = '';
+        this.peer = null;
+        this.connections = [];
+        this.joinedNames = new Set();
+        this.musicPlaying = false;
+        this.playerName = '';
+        this.playerEmoji = '';
+        this.sortedPlayers = [];
+        this.roomFromQR = roomFromQR;
+        this.jumpEnabled = false;
+        this.hardMode = false;
+        this.textualMode = false;
+        this.timerEnabled = false;
+        this.timerSeconds = 0;
+        this.timerInterval = null;
+        this.timerRunning = false;
+        this.timerTimeout = false;
+        this.jumpCount = 0;
+        this.playersJumped = new Set();
+        this.questionJumped = false;
+        this.originalPlayer = 0;
+        this.playerAnswer = null;
+        this.availableEmojis = this.getEmojiList();
+        this.timerTextSeconds = 25;
+        this.timerOptionsSeconds = 15;
+        this.timerAnagramSeconds = 20;
+        this.selectedQuestionId = null;
+        this.selectedQuestionData = null;
+        this.pistasReveladas = 0;
+        this.pistasReveladasSet = new Set();
+        this.valorPregunta = 1;
 
-    this.setupMusic();
-    this.musicStarted = false;
-    this.bindEvents();
-    this.setupEmojiPicker();
-    
-    if (this.restoreState()) {
-        console.log('Estado restaurado');
-    } else if (roomFromQR) {
-        this.showQRJoinScreen(roomFromQR);
-    } else {
-        this.showScreen('home-screen');
+        this.setupMusic();
+        this.musicStarted = false;
+        this.bindEvents();
+        this.setupEmojiPicker();
+        
+        if (this.restoreState()) {
+            console.log('Estado restaurado');
+        } else if (roomFromQR) {
+            this.showQRJoinScreen(roomFromQR);
+        } else {
+            this.showScreen('home-screen');
+        }
     }
-}
+
 
     getEmojiList() {
     return {
@@ -3229,157 +3230,68 @@ updateValorPistaDisplay() {
 }
 
 // [NUEVO] Manejar respuesta de Verdadero/Falso
-handleTrueFalseAnswer(isCorrect, selected) {
-    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
-    
-    this.stopTimer();
-    this.answerRevealed = true;
-    this.playSound(isCorrect ? 'correct' : 'incorrect');
-    
-    let puntosOtorgados = this.currentQuestion.points;
-    if (this.currentQuestion.type === 'whoami') {
-        puntosOtorgados = Math.round(this.currentQuestion.points * this.valorPregunta);
+handleRevelarPista(conn, data) {
+        if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
+        if (this.currentQuestion.type !== 'whoami') return;
+        
+        const playerName = conn.metadata?.name;
+        const playerIndex = this.players.findIndex(p => p.name === playerName);
+        if (playerIndex !== this.currentPlayer) return;
+        
+        const idx = data.pistaIndex;
+        if (this.pistasReveladasSet.has(idx)) return;
+        
+        this.revelarPista(idx);
     }
-    
-    if (isCorrect) {
-        this.players[this.currentPlayer].score += puntosOtorgados;
-    } else if (this.hardMode) {
-        const penalty = Math.floor(puntosOtorgados / 2);
-        this.players[this.currentPlayer].score -= penalty;
-        if (this.players[this.currentPlayer].score < 0) this.players[this.currentPlayer].score = 0;
-    }
-    
-    const answerDiv = document.getElementById('modal-answer');
-    answerDiv.classList.remove('hidden', 'correct-anim', 'incorrect-anim');
-    answerDiv.classList.add(isCorrect ? 'correct-anim' : 'incorrect-anim');
-    document.getElementById('correct-answer-text').textContent = `Respuesta: ${this.currentQuestion.answer}`;
-    document.getElementById('answer-buttons').style.display = 'none';
-    
-    document.querySelectorAll('.tf-btn').forEach(btn => {
-        btn.disabled = true;
-        if (btn.dataset.value === this.currentQuestion.answer) {
-            btn.style.background = '#d1fae5';
-            btn.style.borderColor = '#10b981';
+
+    handlePistaRevelada(data) {
+        const pistasDiv = document.getElementById('modal-pistas');
+        if (pistasDiv) {
+            const btns = pistasDiv.querySelectorAll('.pista-btn');
+            btns.forEach((btn, i) => {
+                if (i === data.pistaIndex) {
+                    btn.textContent = data.pistaTexto;
+                    btn.disabled = true;
+                    btn.style.background = '#d1fae5';
+                    btn.style.borderColor = '#10b981';
+                    btn.style.cursor = 'default';
+                }
+            });
         }
-        if (btn.dataset.value === selected && !isCorrect) {
-            btn.style.background = '#fee2e2';
-            btn.style.borderColor = '#ef4444';
+        
+        const playerPistasDiv = document.getElementById('player-modal-pistas');
+        if (playerPistasDiv) {
+            const btns = playerPistasDiv.querySelectorAll('.pista-btn');
+            btns.forEach((btn, i) => {
+                if (i === data.pistaIndex) {
+                    btn.textContent = data.pistaTexto;
+                    btn.disabled = true;
+                    btn.style.background = '#d1fae5';
+                    btn.style.borderColor = '#10b981';
+                    btn.style.cursor = 'default';
+                }
+            });
         }
-    });
-    
-    const closeBtn = document.querySelector('#question-modal .close');
-    if (closeBtn) closeBtn.style.display = 'flex';
-    
-    this.currentQuestion.used = true;
-    
-    this.broadcast({
-        type: 'answer-result',
-        correct: isCorrect,
-        answer: this.currentQuestion.answer,
-        playerName: this.players[this.currentPlayer].name,
-        playerEmoji: this.players[this.currentPlayer].emoji,
-        pointsAwarded: isCorrect ? puntosOtorgados : (this.hardMode ? -Math.floor(puntosOtorgados / 2) : 0),
-        players: this.players,
-        selectedOption: selected
-    });
-    
-    do {
-        this.currentPlayer = (this.currentPlayer + 1) % this.players.length;
-    } while (this.players[this.currentPlayer]?.isHost && this.players.length > 1);
-    
-    this.broadcast({
-        type: 'game-update',
-        questionId: this.currentQuestion.id,
-        players: this.players,
-        currentPlayer: this.currentPlayer
-    });
-    
-    document.getElementById('player-answer-modal').classList.remove('active');
-    
-    if (this.textualMode) {
-        this.broadcast({
-            type: 'player-turn',
-            currentPlayer: this.currentPlayer,
-            playerName: this.players[this.currentPlayer].name
-        });
+        
+        const valor = data.valorPregunta || 1;
+        const puntos = Math.round((data.puntosBase || 0) * valor);
+        
+        let valorEl = document.getElementById('player-modal-valor');
+        if (valorEl) {
+            const porcentaje = valor * 100;
+            valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
+            valorEl.style.display = 'block';
+        }
+        
+        let hostValorEl = document.getElementById('modal-valor-pregunta');
+        if (hostValorEl) {
+            const porcentaje = valor * 100;
+            hostValorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
+            hostValorEl.style.display = 'block';
+        }
+        
+        this.showToast(`🔓 Pista revelada! Valor: ${valor * 100}%`);
     }
-    
-    this.renderBoard();
-    this.updateManualPointsPanel();
-    this.saveState();
-    
-    if (this.questions.every(q => q.used)) {
-        setTimeout(() => this.endGame(), 1500);
-    }
-
-    handleRevelarPista(conn, data) {
-    if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
-    if (this.currentQuestion.type !== 'whoami') return;
-    
-    const playerName = conn.metadata?.name;
-    const playerIndex = this.players.findIndex(p => p.name === playerName);
-    if (playerIndex !== this.currentPlayer) return;
-    
-    const idx = data.pistaIndex;
-    if (this.pistasReveladasSet.has(idx)) return;
-    
-    this.revelarPista(idx);
-}
-}
-
-handlePistaRevelada(data) {
-    const pistasDiv = document.getElementById('modal-pistas');
-    if (pistasDiv) {
-        const btns = pistasDiv.querySelectorAll('.pista-btn');
-        btns.forEach((btn, i) => {
-            if (i === data.pistaIndex) {
-                btn.textContent = data.pistaTexto;
-                btn.disabled = true;
-                btn.style.background = '#d1fae5';
-                btn.style.borderColor = '#10b981';
-                btn.style.cursor = 'default';
-            }
-        });
-    }
-    
-    // También actualizar en el modal del jugador
-    const playerPistasDiv = document.getElementById('player-modal-pistas');
-    if (playerPistasDiv) {
-        const btns = playerPistasDiv.querySelectorAll('.pista-btn');
-        btns.forEach((btn, i) => {
-            if (i === data.pistaIndex) {
-                btn.textContent = data.pistaTexto;
-                btn.disabled = true;
-                btn.style.background = '#d1fae5';
-                btn.style.borderColor = '#10b981';
-                btn.style.cursor = 'default';
-            }
-        });
-    }
-    
-    const valor = data.valorPregunta || 1;
-    const puntos = Math.round((data.puntosBase || 0) * valor);
-    
-    // Actualizar valor en el modal del jugador
-    let valorEl = document.getElementById('player-modal-valor');
-    if (valorEl) {
-        const porcentaje = valor * 100;
-        valorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
-        valorEl.style.display = 'block';
-    }
-    
-    // Actualizar valor en el modal del host
-    let hostValorEl = document.getElementById('modal-valor-pregunta');
-    if (hostValorEl) {
-        const porcentaje = valor * 100;
-        hostValorEl.textContent = `💎 Valor: ${porcentaje}% de ${data.puntosBase || 0}pts = ${puntos}pts`;
-        hostValorEl.style.display = 'block';
-    }
-    
-    this.showToast(`🔓 Pista revelada! Valor: ${valor * 100}%`);
-}
-
-
 }
 
 document.addEventListener('DOMContentLoaded', function() {
