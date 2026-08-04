@@ -1,9 +1,3 @@
-document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomFromQR = urlParams.get('room');
-    window.game = new JeopardyGame(roomFromQR);
-});
-
 const APP_VERSION = '1.0.7';
 const VERSION_HISTORY = {
     '1.0.0': 'Versión inicial',
