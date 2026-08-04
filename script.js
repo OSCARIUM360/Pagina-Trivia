@@ -84,6 +84,7 @@ class JeopardyGame {
     this.pistasReveladasSet = new Set();
     this.valorPregunta = 1;
     this.editMode = null;
+    this.isAby = false; // [NUEVO] Para el easter egg
 
     this.setupMusic();
     this.musicStarted = false;
@@ -557,13 +558,10 @@ class JeopardyGame {
     const nameInput = document.getElementById('join-player-name');
     let name = nameInput.value.trim();
     
-    // [NUEVO] Validar nombre: máximo 12 caracteres y sin emojis
     if (!name) return alert('Ingresa tu nombre');
     
-    // Eliminar emojis del nombre (caracteres Unicode en rangos de emojis)
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F1E0}-\u{1F1FF}]/gu;
-    const hasEmoji = emojiRegex.test(name);
-    if (hasEmoji) {
+    if (emojiRegex.test(name)) {
         return alert('❌ El nombre no puede contener emojis. Usa solo letras y números.');
     }
     
@@ -573,13 +571,36 @@ class JeopardyGame {
     
     if (!code || code.length !== 6) return alert('El código debe tener 6 caracteres');
     
+    // [NUEVO] Verificar nombre duplicado y agregar número
     const btn = document.getElementById('join-room-submit');
-    btn.disabled = true; btn.textContent = 'Conectando...';
-    this.roomCode = code; this.isHost = false; this.playerName = name;
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+    
+    // Verificar duplicados en la sala (solo si hay conexión)
+    this.roomCode = code;
+    this.isHost = false;
+    this.playerName = name;
+    
+    // Guardar en sessionStorage para posible duplicado
     sessionStorage.setItem('jeopardy-player-code', code);
     sessionStorage.setItem('jeopardy-player-name', name);
     sessionStorage.setItem('jeopardy-player-emoji', this.playerEmoji);
+    
     this.initPeer(code + '-player-' + Date.now());
+}
+
+// [NUEVO] Función para generar nombre con número si está duplicado
+generateUniqueName(baseName, existingNames) {
+    if (!existingNames.has(baseName)) {
+        return baseName;
+    }
+    let counter = 1;
+    let newName = `${baseName} ${counter}`;
+    while (existingNames.has(newName)) {
+        counter++;
+        newName = `${baseName} ${counter}`;
+    }
+    return newName;
 }
 
     initPeer(id) {
@@ -649,9 +670,19 @@ class JeopardyGame {
                 this.showScreen('game-screen');
                 this.startGameMusic();
                 break;
+
+            case 'points-animation': // [NUEVO]
+                this.handlePointsAnimation(data);
+                break;
                 
             case 'game-update':
                 this.applyGameUpdate(data);
+                break;
+
+            case 'name-changed': // [NUEVO]
+                this.playerName = data.newName;
+                sessionStorage.setItem('jeopardy-player-name', data.newName);
+                this.showToast(`⚠️ El nombre "${data.originalName}" ya estaba en uso. Has sido renombrado a "${data.newName}"`);
                 break;
                 
             case 'question-selected':
@@ -777,10 +808,8 @@ class JeopardyGame {
     const name = data.name?.trim();
     const emoji = data.emoji || '';
     
-    // [NUEVO] Validación adicional en el servidor (host)
     if (!name) return;
     
-    // Verificar emojis en el nombre
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F1E0}-\u{1F1FF}]/gu;
     if (emojiRegex.test(name)) {
         conn.send({ type: 'error', message: 'El nombre no puede contener emojis' });
@@ -792,9 +821,23 @@ class JeopardyGame {
         return;
     }
     
+    // [NUEVO] Generar nombre único si está duplicado
+    let finalName = name;
     if (this.joinedNames.has(name)) {
-        conn.send({ type: 'error', message: 'Nombre ya en uso' });
-        return;
+        let counter = 1;
+        let newName = `${name} ${counter}`;
+        while (this.joinedNames.has(newName)) {
+            counter++;
+            newName = `${name} ${counter}`;
+        }
+        finalName = newName;
+        // Notificar al jugador que su nombre fue modificado
+        conn.send({ 
+            type: 'name-changed', 
+            originalName: name,
+            newName: finalName 
+        });
+        this.showToast(`⚠️ El nombre "${name}" ya estaba en uso. Has sido renombrado a "${finalName}"`);
     }
     
     if (this.gameStarted) {
@@ -802,9 +845,9 @@ class JeopardyGame {
         return;
     }
     
-    this.players.push({ name, score: 0, id: conn.peer, isHost: false, emoji });
-    this.joinedNames.add(name);
-    conn.metadata = { name, emoji };
+    this.players.push({ name: finalName, score: 0, id: conn.peer, isHost: false, emoji });
+    this.joinedNames.add(finalName);
+    conn.metadata = { name: finalName, emoji };
     conn.send({ type: 'join-accepted', players: this.players });
     this.broadcastPlayers();
     this.updateLobby();
@@ -1742,18 +1785,84 @@ renderQuestionsList(container) {
     }
 
     updateLobby() {
-        const container = document.getElementById('lobby-players-list'); if (!container) return; container.innerHTML = '';
-        this.players.forEach((p, i) => {
-            const tag = document.createElement('div'); tag.className = 'player-tag' + (p.isHost ? ' host' : '');
-            tag.innerHTML = (p.emoji ? p.emoji + ' ' : '') + p.name;
-            if (this.isHost && !p.isHost) {
-                const kickBtn = document.createElement('button'); kickBtn.className = 'kick-btn'; kickBtn.innerHTML = '×';
-                kickBtn.title = 'Expulsar'; kickBtn.addEventListener('click', (e) => { e.stopPropagation(); this.kickPlayer(i); });
-                tag.appendChild(kickBtn);
-            }
-            container.appendChild(tag);
+    const container = document.getElementById('lobby-players-list');
+    if (!container) return;
+    container.innerHTML = '';
+    this.players.forEach((p, i) => {
+        const tag = document.createElement('div');
+        tag.className = 'player-tag' + (p.isHost ? ' host' : '');
+        tag.innerHTML = (p.emoji ? p.emoji + ' ' : '') + p.name;
+        
+        // [NUEVO] Easter egg para "ABY"
+        if (p.name === 'ABY' || p.name === 'Aby' || p.name === 'aby') {
+            tag.classList.add('aby-easter-egg');
+            tag.style.animation = 'abyColorShift 2s ease-in-out infinite';
+            tag.style.border = '2px solid #FFD700';
+            tag.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.3)';
+            
+            // Crear partículas doradas
+            this.createAbyParticles(tag, p.emoji);
+        }
+        
+        if (this.isHost && !p.isHost) {
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'kick-btn';
+            kickBtn.innerHTML = '×';
+            kickBtn.title = 'Expulsar';
+            kickBtn.addEventListener('click', (e) => { e.stopPropagation(); this.kickPlayer(i); });
+            tag.appendChild(kickBtn);
+        }
+        container.appendChild(tag);
+    });
+}
+
+// [NUEVO] Crear partículas para el easter egg ABY
+createAbyParticles(element, emoji) {
+    const particleInterval = setInterval(() => {
+        if (!document.body.contains(element)) {
+            clearInterval(particleInterval);
+            return;
+        }
+        
+        const rect = element.getBoundingClientRect();
+        const particle = document.createElement('div');
+        particle.className = 'aby-particle';
+        
+        const isEmoji = Math.random() < 0.15 && emoji;
+        particle.textContent = isEmoji ? emoji : '✦';
+        
+        const size = isEmoji ? 16 + Math.random() * 12 : 8 + Math.random() * 8;
+        particle.style.cssText = `
+            position: fixed;
+            left: ${rect.left + Math.random() * rect.width}px;
+            top: ${rect.top + Math.random() * rect.height}px;
+            font-size: ${size}px;
+            color: ${isEmoji ? '#FFD700' : '#FFD700'};
+            pointer-events: none;
+            z-index: 999;
+            opacity: 1;
+            transition: all ${1 + Math.random() * 1.5}s ease-out;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        `;
+        
+        document.body.appendChild(particle);
+        
+        requestAnimationFrame(() => {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 50 + Math.random() * 100;
+            particle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance - 60}px)`;
+            particle.style.opacity = '0';
         });
-    }
+        
+        setTimeout(() => {
+            if (particle.parentNode) particle.remove();
+        }, 2500);
+    }, 300 + Math.random() * 400);
+    
+    // Guardar intervalo para limpiar después
+    if (!this._abyIntervals) this._abyIntervals = [];
+    this._abyIntervals.push(particleInterval);
+}
 
     startGame() {
     if (!this.isHost) return;
@@ -1813,7 +1922,6 @@ renderQuestionsList(container) {
         board.appendChild(h);
     });
     
-    // [NUEVO] Para tracking de selección de jugadores - GLOBAL
     let selectedCell = null;
     let selectedQuestionId = null;
     
@@ -1833,7 +1941,21 @@ renderQuestionsList(container) {
             cell.dataset.points = (i + 1) * 100;
             cell.style.position = 'relative';
             
-            // [CORREGIDO] Si la pregunta ya fue seleccionada por un jugador, mostrarla (también para host)
+            // [NUEVO] Easter egg para "ABY" en el tablero (solo si hay un jugador ABY)
+            const abyPlayer = this.players.find(p => p.name === 'ABY' || p.name === 'Aby' || p.name === 'aby');
+            if (abyPlayer && !q?.used) {
+                cell.addEventListener('mouseenter', () => {
+                    cell.style.borderColor = '#FFD700';
+                    cell.style.boxShadow = '0 0 30px rgba(255, 215, 0, 0.5)';
+                });
+                cell.addEventListener('mouseleave', () => {
+                    if (!cell.classList.contains('player-selected')) {
+                        cell.style.borderColor = '';
+                        cell.style.boxShadow = '';
+                    }
+                });
+            }
+            
             if (q && !q.used && this.selectedQuestionId === q.id) {
                 cell.classList.add('player-selected');
                 cell.style.border = '4px solid #f59e0b';
@@ -1846,7 +1968,6 @@ renderQuestionsList(container) {
                 cell.style.position = 'relative';
                 cell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
                 
-                // Agregar indicador para host también
                 const indicator = document.createElement('div');
                 indicator.className = 'selection-indicator';
                 indicator.textContent = '👆';
@@ -1868,12 +1989,10 @@ renderQuestionsList(container) {
                 if (this.isHost) {
                     cell.addEventListener('click', () => this.selectQuestion(q));
                 } else if (this.textualMode) {
-                    // Selección para jugadores
                     cell.addEventListener('click', () => {
                         if (this.isHost) return;
                         const myIndex = this.players.findIndex(p => p.name === this.playerName);
                         if (myIndex === this.currentPlayer && this.connections.length > 0) {
-                            // Deseleccionar anterior en el cliente
                             if (selectedCell) {
                                 selectedCell.classList.remove('player-selected');
                                 selectedCell.style.border = '';
@@ -1885,12 +2004,10 @@ renderQuestionsList(container) {
                                 selectedCell.style.zIndex = '';
                                 selectedCell.style.position = '';
                                 selectedCell.style.animation = '';
-                                // Remover indicador
                                 const oldInd = selectedCell.querySelector('.selection-indicator');
                                 if (oldInd) oldInd.remove();
                             }
                             
-                            // Seleccionar nueva - visualmente MUY visible
                             cell.classList.add('player-selected');
                             cell.style.border = '4px solid #f59e0b';
                             cell.style.boxShadow = '0 0 30px rgba(245, 158, 11, 0.8), inset 0 0 20px rgba(245, 158, 11, 0.3)';
@@ -1902,7 +2019,6 @@ renderQuestionsList(container) {
                             cell.style.position = 'relative';
                             cell.style.animation = 'selectedPulse 0.8s ease-in-out infinite';
                             
-                            // Agregar indicador visual
                             const indicator = document.createElement('div');
                             indicator.className = 'selection-indicator';
                             indicator.textContent = '👆';
@@ -1922,10 +2038,9 @@ renderQuestionsList(container) {
                             selectedCell = cell;
                             selectedQuestionId = q.id;
                             
-                            // Enviar al host con el ID correcto
-                            this.connections[0].send({ 
-                                type: 'player-select-question', 
-                                questionId: q.id 
+                            this.connections[0].send({
+                                type: 'player-select-question',
+                                questionId: q.id
                             });
                             this.showToast('📤 Seleccionaste: ' + q.category + ' - ' + q.points + 'pts');
                         }
@@ -1941,27 +2056,42 @@ renderQuestionsList(container) {
 }
 
     renderPlayers() {
-        const bar = document.getElementById('players-bar'); if (!bar) return; bar.innerHTML = '';
-        const gamePlayers = this.players.filter(p => !p.isHost);
-        gamePlayers.forEach((p) => {
-            const originalIndex = this.players.indexOf(p);
-            const div = document.createElement('div');
-            div.className = `player-score ${originalIndex === this.currentPlayer ? 'active' : ''}`;
-            div.innerHTML = `<strong>${p.emoji ? p.emoji + ' ' : ''}${p.name}</strong><br>${p.score} pts`;
-            if (this.isHost) {
-                div.style.cursor = 'pointer';
-                div.addEventListener('click', () => {
-                    if (!document.getElementById('question-modal').classList.contains('active')) {
-                        this.currentPlayer = originalIndex; this.renderBoard();
-                        this.broadcast({ type: 'game-update', currentPlayer: this.currentPlayer });
-                        if (this.textualMode) this.broadcast({ type: 'player-turn', currentPlayer: this.currentPlayer, playerName: this.players[this.currentPlayer].name });
-                        this.saveState();
-                    }
-                });
-            }
-            bar.appendChild(div);
-        });
-    }
+    const bar = document.getElementById('players-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    const gamePlayers = this.players.filter(p => !p.isHost);
+    gamePlayers.forEach((p) => {
+        const originalIndex = this.players.indexOf(p);
+        const div = document.createElement('div');
+        div.className = `player-score ${originalIndex === this.currentPlayer ? 'active' : ''}`;
+        div.innerHTML = `<strong>${p.emoji ? p.emoji + ' ' : ''}${p.name}</strong><br>${p.score} pts`;
+        
+        // [NUEVO] Easter egg para "ABY" en el juego
+        if (p.name === 'ABY' || p.name === 'Aby' || p.name === 'aby') {
+            div.classList.add('aby-easter-egg');
+            div.style.animation = 'abyColorShift 2s ease-in-out infinite';
+            div.style.border = '2px solid #FFD700';
+            div.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.3)';
+            
+            // Crear partículas doradas en el juego
+            this.createAbyParticles(div, p.emoji);
+        }
+        
+        if (this.isHost) {
+            div.style.cursor = 'pointer';
+            div.addEventListener('click', () => {
+                if (!document.getElementById('question-modal').classList.contains('active')) {
+                    this.currentPlayer = originalIndex;
+                    this.renderBoard();
+                    this.broadcast({ type: 'game-update', currentPlayer: this.currentPlayer });
+                    if (this.textualMode) this.broadcast({ type: 'player-turn', currentPlayer: this.currentPlayer, playerName: this.players[this.currentPlayer].name });
+                    this.saveState();
+                }
+            });
+        }
+        bar.appendChild(div);
+    });
+}
 
     updateTurnIndicator() {
         const ind = document.getElementById('turn-indicator');
@@ -2857,26 +2987,58 @@ handleQuestionAssigned(data) {
     }
 
     disconnect() {
-        if (this.peer) { this.peer.destroy(); this.peer = null; }
-        this.clearState(); sessionStorage.removeItem('jeopardy-player-code'); sessionStorage.removeItem('jeopardy-player-name'); sessionStorage.removeItem('jeopardy-player-emoji');
-        this.stopGameMusic();
-        this.categories = []; this.questions = []; this.players = []; this.connections = []; this.joinedNames = new Set();
-        this.currentPlayer = 0; this.gameStarted = false; this.currentQuestion = null; this.answerRevealed = false;
-        this.isHost = false; this.roomCode = ''; this.roomFromQR = null; this.jumpEnabled = false; this.hardMode = false;
-        this.textualMode = false; this.questionJumped = false; this.playerAnswer = null;
-        document.getElementById('question-modal').classList.remove('active');
-        document.getElementById('player-answer-modal').classList.remove('active');
-        document.getElementById('answer-buttons').style.display = 'flex';
-        document.getElementById('join-form').classList.add('hidden'); document.getElementById('load-trivia-form').classList.add('hidden');
-        document.querySelector('.home-actions').style.display = 'flex'; document.querySelector('.trivia-actions').style.display = 'flex';
-        const btn = document.getElementById('join-room-submit'); if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-        const codeInput = document.getElementById('room-code'); if (codeInput) { codeInput.disabled = false; codeInput.value = ''; }
-        const triviaInput = document.getElementById('trivia-code-input'); if (triviaInput) triviaInput.value = '';
-        const confetti = document.getElementById('confetti'); if (confetti) confetti.innerHTML = '';
-        const closeBtn = document.querySelector('#question-modal .close'); if (closeBtn) closeBtn.style.display = 'flex';
-        if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
-        this.showScreen('home-screen');
+    if (this.peer) { this.peer.destroy(); this.peer = null; }
+    this.clearState();
+    sessionStorage.removeItem('jeopardy-player-code');
+    sessionStorage.removeItem('jeopardy-player-name');
+    sessionStorage.removeItem('jeopardy-player-emoji');
+    this.stopGameMusic();
+    
+    // [NUEVO] Limpiar intervalos de partículas ABY
+    if (this._abyIntervals) {
+        this._abyIntervals.forEach(interval => clearInterval(interval));
+        this._abyIntervals = [];
     }
+    
+    this.categories = [];
+    this.questions = [];
+    this.players = [];
+    this.connections = [];
+    this.joinedNames = new Set();
+    this.currentPlayer = 0;
+    this.gameStarted = false;
+    this.currentQuestion = null;
+    this.answerRevealed = false;
+    this.isHost = false;
+    this.roomCode = '';
+    this.roomFromQR = null;
+    this.jumpEnabled = false;
+    this.hardMode = false;
+    this.textualMode = false;
+    this.questionJumped = false;
+    this.playerAnswer = null;
+    this.isAby = false;
+    
+    document.getElementById('question-modal').classList.remove('active');
+    document.getElementById('player-answer-modal').classList.remove('active');
+    document.getElementById('answer-buttons').style.display = 'flex';
+    document.getElementById('join-form').classList.add('hidden');
+    document.getElementById('load-trivia-form').classList.add('hidden');
+    document.querySelector('.home-actions').style.display = 'flex';
+    document.querySelector('.trivia-actions').style.display = 'flex';
+    const btn = document.getElementById('join-room-submit');
+    if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+    const codeInput = document.getElementById('room-code');
+    if (codeInput) { codeInput.disabled = false; codeInput.value = ''; }
+    const triviaInput = document.getElementById('trivia-code-input');
+    if (triviaInput) triviaInput.value = '';
+    const confetti = document.getElementById('confetti');
+    if (confetti) confetti.innerHTML = '';
+    const closeBtn = document.querySelector('#question-modal .close');
+    if (closeBtn) closeBtn.style.display = 'flex';
+    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
+    this.showScreen('home-screen');
+}
 
     handleOptionChoice(isCorrect, selectedOption) {
     if (!this.isHost || !this.currentQuestion || this.answerRevealed) return;
@@ -3624,6 +3786,17 @@ showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
     
     document.body.appendChild(anim);
     
+    // [NUEVO] Broadcast de la animación para todos los jugadores
+    if (this.isHost) {
+        this.broadcast({
+            type: 'points-animation',
+            playerName: playerName,
+            playerEmoji: playerEmoji || '',
+            points: points,
+            isCorrect: isCorrect
+        });
+    }
+    
     // Encontrar el elemento del jugador en la barra
     const playersBar = document.getElementById('players-bar');
     if (playersBar) {
@@ -3636,21 +3809,17 @@ showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
         });
         
         if (targetElement) {
-            // Obtener posición del elemento objetivo
             const targetRect = targetElement.getBoundingClientRect();
             const animRect = anim.getBoundingClientRect();
             
-            // Calcular desplazamiento
             const deltaX = targetRect.left + targetRect.width/2 - animRect.left - animRect.width/2;
             const deltaY = targetRect.top + targetRect.height/2 - animRect.top - animRect.height/2;
             
-            // Animar hacia el objetivo
             setTimeout(() => {
                 anim.style.transition = 'all 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
                 anim.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
                 anim.style.opacity = '0.5';
                 
-                // Destacar el jugador
                 targetElement.style.transition = 'all 0.3s ease';
                 targetElement.style.transform = 'scale(1.2)';
                 targetElement.style.boxShadow = `0 0 30px ${isCorrect ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`;
@@ -3663,7 +3832,84 @@ showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
         }
     }
     
-    // Eliminar el elemento después de la animación
+    setTimeout(() => {
+        anim.style.transition = 'opacity 0.5s ease';
+        anim.style.opacity = '0';
+        setTimeout(() => {
+            if (anim.parentNode) anim.remove();
+        }, 500);
+    }, 2500);
+}
+
+// [NUEVO] Manejar animación de puntos para jugadores
+handlePointsAnimation(data) {
+    const anim = document.createElement('div');
+    anim.className = 'points-animation';
+    anim.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${data.isCorrect ? 'rgba(16, 185, 129, 0.95)' : 'rgba(239, 68, 68, 0.95)'};
+        color: white;
+        padding: 20px 40px;
+        border-radius: 16px;
+        font-size: 2rem;
+        font-weight: 700;
+        text-align: center;
+        z-index: 2000;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        animation: pointsAppear 0.5s ease forwards;
+        pointer-events: none;
+    `;
+    
+    const sign = data.points > 0 ? '+' : '';
+    const emoji = data.isCorrect ? '🎉' : '😢';
+    
+    anim.innerHTML = `
+        <div style="font-size: 1.2rem; margin-bottom: 4px;">${data.playerEmoji || ''} ${data.playerName}</div>
+        <div style="font-size: 2.5rem; ${data.isCorrect ? '' : 'color: #ffcccc;'}">
+            ${sign}${data.points} pts ${emoji}
+        </div>
+    `;
+    
+    document.body.appendChild(anim);
+    
+    // Encontrar el elemento del jugador
+    const playersBar = document.getElementById('players-bar');
+    if (playersBar) {
+        const playerElements = playersBar.querySelectorAll('.player-score');
+        let targetElement = null;
+        playerElements.forEach(el => {
+            if (el.textContent.includes(data.playerName)) {
+                targetElement = el;
+            }
+        });
+        
+        if (targetElement) {
+            const targetRect = targetElement.getBoundingClientRect();
+            const animRect = anim.getBoundingClientRect();
+            
+            const deltaX = targetRect.left + targetRect.width/2 - animRect.left - animRect.width/2;
+            const deltaY = targetRect.top + targetRect.height/2 - animRect.top - animRect.height/2;
+            
+            setTimeout(() => {
+                anim.style.transition = 'all 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                anim.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
+                anim.style.opacity = '0.5';
+                
+                targetElement.style.transition = 'all 0.3s ease';
+                targetElement.style.transform = 'scale(1.2)';
+                targetElement.style.boxShadow = `0 0 30px ${data.isCorrect ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`;
+                
+                setTimeout(() => {
+                    targetElement.style.transform = '';
+                    targetElement.style.boxShadow = '';
+                }, 800);
+            }, 600);
+        }
+    }
+    
     setTimeout(() => {
         anim.style.transition = 'opacity 0.5s ease';
         anim.style.opacity = '0';
