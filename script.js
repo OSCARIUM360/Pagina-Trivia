@@ -1045,6 +1045,20 @@ renderCategoryInputs(container) {
     for (let i = 0; i < this.totalCategories; i++) {
         const div = document.createElement('div');
         div.className = 'category-input';
+        div.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+        div.innerHTML = `
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categoría ${i + 1}</label>
+            <input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
+        `;
+        container.appendChild(div);
+    }
+}
+
+renderCategoryInputs(container) {
+    container.innerHTML = '';
+    for (let i = 0; i < this.totalCategories; i++) {
+        const div = document.createElement('div');
+        div.className = 'category-input';
         div.innerHTML = `
             <label>Categoría ${i + 1}</label>
             <input type="text" class="category-name" placeholder="Ej: Ciencia" value="${this.categories[i] || ''}">
@@ -1286,23 +1300,43 @@ renderQuestionsList(container) {
     const container = document.getElementById('questions-container');
     container.innerHTML = '';
     
-    // Controles para editar cantidad de preguntas por categoría
+    // Controles para editar categorías y preguntas
     const controls = document.createElement('div');
     controls.className = 'questions-controls';
-    controls.style.cssText = 'display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
-    controls.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categorías:</label>
-            <input type="number" id="edit-categories-count-2" min="2" max="8" value="${this.totalCategories}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:0.95rem;">
-            <button id="apply-categories-count-2" class="btn btn-sm btn-primary" style="padding:6px 12px;font-size:0.8rem;">Aplicar</button>
+    controls.style.cssText = 'display:flex;flex-direction:column;gap:12px;margin-bottom:20px;padding:16px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);';
+    
+    // Primera fila: editar nombres de categorías
+    const categoryNamesRow = document.createElement('div');
+    categoryNamesRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;';
+    categoryNamesRow.innerHTML = `
+        <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;min-width:100px;">Nombres de categorías:</label>
+        <div id="category-names-edit" style="display:flex;flex-wrap:wrap;gap:6px;flex:1;">
+            ${this.categories.map((cat, idx) => `
+                <input type="text" class="category-name-edit" data-idx="${idx}" value="${cat}" placeholder="Categoría ${idx + 1}" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.85rem;width:120px;flex:1;min-width:80px;">
+            `).join('')}
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-left:1px solid var(--border);padding-left:12px;">
-            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Preguntas por categoría:</label>
-            <input type="number" id="edit-questions-count" min="1" max="10" value="${this.questionsPerCategory}" style="width:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:0.95rem;">
-            <button id="apply-questions-count" class="btn btn-sm btn-primary" style="padding:6px 12px;font-size:0.8rem;">Aplicar</button>
-        </div>
-        <span style="font-size:0.75rem;color:var(--text-secondary);">Categorías (2-8) | Preguntas (1-10)</span>
+        <button id="apply-category-names" class="btn btn-sm btn-primary" style="padding:4px 12px;font-size:0.8rem;">Actualizar nombres</button>
     `;
+    controls.appendChild(categoryNamesRow);
+    
+    // Segunda fila: cantidad de categorías y preguntas
+    const settingsRow = document.createElement('div');
+    settingsRow.style.cssText = 'display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border);';
+    settingsRow.innerHTML = `
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Categorías:</label>
+            <input type="number" id="edit-categories-count-2" min="2" max="8" value="${this.totalCategories}" style="width:55px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:0.9rem;">
+            <button id="apply-categories-count-2" class="btn btn-sm btn-primary" style="padding:4px 10px;font-size:0.75rem;">Aplicar</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-secondary);font-weight:500;">Preguntas por categoría:</label>
+            <input type="number" id="edit-questions-count" min="1" max="10" value="${this.questionsPerCategory}" style="width:55px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:0.9rem;">
+            <button id="apply-questions-count" class="btn btn-sm btn-primary" style="padding:4px 10px;font-size:0.75rem;">Aplicar</button>
+        </div>
+        <span style="font-size:0.7rem;color:var(--text-secondary);">Categorías (2-8) | Preguntas (1-10)</span>
+    `;
+    controls.appendChild(settingsRow);
+    
     container.appendChild(controls);
     
     // Contenedor de preguntas
@@ -1311,6 +1345,26 @@ renderQuestionsList(container) {
     container.appendChild(questionsContainer);
     
     this.renderQuestionsList(questionsContainer);
+    
+    // Evento para actualizar nombres de categorías
+    document.getElementById('apply-category-names').addEventListener('click', () => {
+        const inputs = document.querySelectorAll('.category-name-edit');
+        const newNames = [];
+        inputs.forEach(input => {
+            const name = input.value.trim();
+            if (name) {
+                newNames.push(name);
+            } else {
+                newNames.push(`Categoría ${parseInt(input.dataset.idx) + 1}`);
+            }
+        });
+        this.categories = newNames;
+        // Reconstruir preguntas con nuevos nombres
+        this.rebuildQuestions();
+        this.renderQuestionsList(questionsContainer);
+        this.saveState();
+        this.showToast('✅ Nombres de categorías actualizados');
+    });
     
     // Evento para cambiar número de categorías
     document.getElementById('apply-categories-count-2').addEventListener('click', () => {
@@ -1326,7 +1380,16 @@ renderQuestionsList(container) {
         this.categories = this.categories.slice(0, newCount);
         this.rebuildQuestions();
         this.renderQuestionsList(questionsContainer);
+        // Actualizar también los inputs de nombres
+        const namesContainer = document.getElementById('category-names-edit');
+        if (namesContainer) {
+            namesContainer.innerHTML = this.categories.map((cat, idx) => `
+                <input type="text" class="category-name-edit" data-idx="${idx}" value="${cat}" placeholder="Categoría ${idx + 1}" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.85rem;width:120px;flex:1;min-width:80px;">
+            `).join('');
+        }
+        document.getElementById('edit-categories-count-2').value = this.totalCategories;
         this.saveState();
+        this.showToast('✅ Número de categorías actualizado');
     });
     
     // Evento para cambiar número de preguntas
@@ -1340,6 +1403,7 @@ renderQuestionsList(container) {
         this.rebuildQuestions();
         this.renderQuestionsList(questionsContainer);
         this.saveState();
+        this.showToast('✅ Número de preguntas actualizado');
     });
     
     this.showScreen('questions-screen');
@@ -1479,7 +1543,7 @@ renderQuestionsList(container) {
             this.editMode = null;
             this.showLobby();
             this.saveState();
-            this.showToast('✅ Preguntas actualizadas');
+            this.showToast('✅ Trivia actualizada correctamente');
         } else {
             this.showLobby();
             this.saveState();
@@ -3480,18 +3544,10 @@ handleRevelarPista(conn, data) {
     editTrivia() {
     if (!this.isHost) return;
     
-    // Preguntar si quiere editar categorías o preguntas
-    const choice = confirm('¿Qué quieres editar?\n\n- "Aceptar" para editar categorías\n- "Cancelar" para editar preguntas');
-    
-    if (choice) {
-        // Editar categorías
-        this.editMode = 'categories';
-        this.showCategoriesScreen();
-    } else {
-        // Editar preguntas
-        this.editMode = 'questions';
-        this.showQuestionsScreen();
-    }
+    // Ir directamente a editar preguntas
+    this.editMode = 'questions';
+    this.showQuestionsScreen();
+    this.showToast('✏️ Editando trivia - puedes modificar categorías, preguntas y respuestas');
 }
 
 showPointsAnimation(playerName, playerEmoji, points, isCorrect) {
